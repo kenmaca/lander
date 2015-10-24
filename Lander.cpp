@@ -159,8 +159,33 @@
   Standard C libraries
 */
 #include <math.h>
+#include <iostream>
+#include <ctime>
+//#include <stdlib.h>
+#include <unistd.h>
+using namespace std;
+
 
 #include "Lander_Control.h"
+
+double vel_array[3] = {0, 0, 0};
+int first_loop = 0;
+int rotate_flag = 0;
+double des_angle;
+int safety = 0;
+int done = 0;
+
+double Velocity_X_robust();
+void Wait_Rotate(double angle);
+void find_velocity();
+double Position_Y_robust();
+void Right_Thruster_robust(double power);
+void Working_Thruster_On(double power);
+int Working_Thruster();
+void Set_Rotate(double angle);
+void Left_Thruster_robust(double power);
+void Main_Thruster_robust(double power);
+int Is_OK();
 
 void Lander_Control(void)
 {
@@ -216,75 +241,137 @@ void Lander_Control(void)
 
  double VXlim;
  double VYlim;
+ 
+ 
+ //Right_Thruster_robust(1.0);
+ //Left_Thruster_robust(1.0);
+ //Set_Rotate(45.0);
+ //Right_Thruster_robust(1.0);
+ 
+   // Set velocity limits depending on distance to platform.
+   // If the module is far from the platform allow it to
+   // move faster, decrease speed limits as the module
+   // approaches landing. You may need to be more conservative
+   // with velocity limits when things fail.
+   if (fabs(Position_X()-PLAT_X)>200) VXlim=25;
+   else if (fabs(Position_X()-PLAT_X)>100) VXlim=15;
+   else VXlim=5;
 
- // Set velocity limits depending on distance to platform.
- // If the module is far from the platform allow it to
- // move faster, decrease speed limits as the module
- // approaches landing. You may need to be more conservative
- // with velocity limits when things fail.
- if (fabs(Position_X()-PLAT_X)>200) VXlim=25;
- else if (fabs(Position_X()-PLAT_X)>100) VXlim=15;
- else VXlim=5;
+   if (PLAT_Y-Position_Y()>200) VYlim=-20;
+   else if (PLAT_Y-Position_Y()>100) VYlim=-10;  // These are negative because they
+   else VYlim=-4;				       // limit descent velocity
 
- if (PLAT_Y-Position_Y()>200) VYlim=-20;
- else if (PLAT_Y-Position_Y()>100) VYlim=-10;  // These are negative because they
- else VYlim=-4;				       // limit descent velocity
+   // Ensure we will be OVER the platform when we land
+   if ( fabs(PLAT_X-Position_X())/fabs(Velocity_X()) > 
+    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y()) ) VYlim=0;
 
- // Ensure we will be OVER the platform when we land
- if (fabs(PLAT_X-Position_X())/fabs(Velocity_X())>1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y())) VYlim=0;
+  if (Is_OK()) {
+   // IMPORTANT NOTE: The code below assumes all components working
+   // properly. IT MAY OR MAY NOT BE USEFUL TO YOU when components
+   // fail. More likely, you will need a set of case-based code
+   // chunks, each of which works under particular failure conditions.
 
- // IMPORTANT NOTE: The code below assumes all components working
- // properly. IT MAY OR MAY NOT BE USEFUL TO YOU when components
- // fail. More likely, you will need a set of case-based code
- // chunks, each of which works under particular failure conditions.
+   // Check for rotation away from zero degrees - Rotate first,
+   // use thrusters only when not rotating to avoid adding
+   // velocity components along the rotation directions
+   // Note that only the latest Rotate() command has any
+   // effect, i.e. the rotation angle does not accumulate
+   // for successive calls.
 
- // Check for rotation away from zero degrees - Rotate first,
- // use thrusters only when not rotating to avoid adding
- // velocity components along the rotation directions
- // Note that only the latest Rotate() command has any
- // effect, i.e. the rotation angle does not accumulate
- // for successive calls.
+    if (Angle()>1&&Angle()<359)
+    {
+     if (Angle()>=180) Rotate(360-Angle());
+     else Rotate(-Angle());
+     return;
+    }
+   
+   // Module is oriented properly, check for horizontal position
+   // and set thrusters appropriately.
+   if (Position_X()>PLAT_X)
+   {
+    // Lander is to the LEFT of the landing platform, use Right thrusters to move
+    // lander to the left.
+    Left_Thruster(0.0);	// Make sure we're not fighting ourselves here!
+    if (Velocity_X()>(-VXlim)) 
+      Right_Thruster((VXlim+fmin(0,Velocity_X()))/VXlim);
+    else
+    {
+     // Exceeded velocity limit, brake
+     Right_Thruster(0.0);
+     Left_Thruster(fabs(VXlim-Velocity_X()));
+    }
+   }
+   else
+   {
+    // Lander is to the RIGHT of the landing platform, opposite from above
+    Right_Thruster(0);
+    if (Velocity_X()<VXlim) Left_Thruster((VXlim-fmax(0,Velocity_X()))/VXlim);
+    else
+    {
+     Left_Thruster(0);
+     Right_Thruster(fabs(VXlim-Velocity_X()));
+    }
+   }
+   
+   //Wait_Rotate(45);
+   //cout << Position_Y_robust() << "\n";
+   // cout << Velocity_X_robust() << " : " << Velocity_X() << "\n";
+   // Vertical adjustments. Basically, keep the module below the limit for
+   // vertical velocity and allow for continuous descent. We trust
+   // Safety_Override() to save us from crashing with the ground.
+   if (Velocity_Y()<VYlim) Main_Thruster(1.0);
+   else Main_Thruster(0); 
+  } else {
 
- if (Angle()>1&&Angle()<359)
- {
-  if (Angle()>=180) Rotate(360-Angle());
-  else Rotate(-Angle());
-  return;
- }
+   if (done)
+    return;
 
- // Module is oriented properly, check for horizontal position
- // and set thrusters appropriately.
- if (Position_X()>PLAT_X)
- {
-  // Lander is to the LEFT of the landing platform, use Right thrusters to move
-  // lander to the left.
-  Left_Thruster(0);	// Make sure we're not fighting ourselves here!
-  if (Velocity_X()>(-VXlim)) Right_Thruster((VXlim+fmin(0,Velocity_X()))/VXlim);
-  else
-  {
-   // Exceeded velocity limit, brake
-   Right_Thruster(0);
-   Left_Thruster(fabs(VXlim-Velocity_X()));
+   if (Velocity_Y() < VYlim) { 
+    safety = 1;
+   }
+
+   if (safety) {
+    if (Velocity_Y() < VYlim + 4) {
+     Main_Thruster_robust(1.0);
+     return;
+   } else
+     safety = 0;
+   }
+
+   if (Position_X()>PLAT_X)
+   {
+    // Lander is to the LEFT of the landing platform, use Right thrusters to move
+    // lander to the left.
+    // Make sure we're not fighting ourselves here!
+    if (Velocity_X()>(-VXlim)) 
+      Right_Thruster_robust((VXlim+fmin(0,Velocity_X()))/VXlim);
+    else
+    {
+     // Exceeded velocity limit, brake
+     Left_Thruster_robust(fabs(VXlim-Velocity_X()));
+    }
+
+   } else {
+    // Lander is to the RIGHT of the landing platform, opposite from above
+    if (Velocity_X()<VXlim) Left_Thruster_robust((VXlim-fmax(0,Velocity_X()))/VXlim);
+    else
+    {
+     Right_Thruster_robust(fabs(VXlim-Velocity_X()));
+    }
+   }
+
+   if (fabs(Position_X() - PLAT_X) < 10 && (PLAT_Y - Position_Y()) < 20) {
+    Left_Thruster(0);
+    Right_Thruster(0);
+    Main_Thruster(0);
+    Set_Rotate(0.0);
+    done = 1;
+    return;
+   }  
+
+
   }
- }
- else
- {
-  // Lander is to the RIGHT of the landing platform, opposite from above
-  Right_Thruster(0);
-  if (Velocity_X()<VXlim) Left_Thruster((VXlim-fmax(0,Velocity_X()))/VXlim);
-  else
-  {
-   Left_Thruster(0);
-   Right_Thruster(fabs(VXlim-Velocity_X()));
-  }
- }
-
- // Vertical adjustments. Basically, keep the module below the limit for
- // vertical velocity and allow for continuous descent. We trust
- // Safety_Override() to save us from crashing with the ground.
- if (Velocity_Y()<VYlim) Main_Thruster(1.0);
- else Main_Thruster(0);
-}
+} 
 
 void Safety_Override(void)
 {
@@ -316,6 +403,8 @@ void Safety_Override(void)
   carry out speed corrections using the thrusters
 **************************************************/
 
+ 
+ 
  double DistLimit;
  double Vmag;
  double dmin;
@@ -327,6 +416,10 @@ void Safety_Override(void)
  Vmag+=Velocity_Y()*Velocity_Y();
 
  DistLimit=fmax(75,Vmag);
+
+ int offset = (((int) lround(Angle() / 10)) % 36);
+
+ cout << SONAR_DIST[18] << " : " << RangeDist() << "\n";
 
  // If we're close to the landing platform, disable
  // safety override (close to the landing platform
@@ -345,33 +438,34 @@ void Safety_Override(void)
  if (Velocity_X()>0)
  {
   for (int i=5;i<14;i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
+   if (SONAR_DIST[(i - offset) % 36]>-1&&SONAR_DIST[(i - offset) % 36]<dmin) 
+    dmin=SONAR_DIST[(i - offset) % 36];
  }
  else
  {
-  for (int i=22;i<32;i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
+  for (int i = 22; i < 32; i++)
+   if (SONAR_DIST[(i - offset) % 36] > -1 && SONAR_DIST[(i - offset) % 36] < dmin) 
+    dmin=SONAR_DIST[(i - offset) % 36];
  }
  // Determine whether we're too close for comfort. There is a reason
  // to have this distance limit modulated by horizontal speed...
  // what is it?
+
+
+ 
+
  if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
  { // Too close to a surface in the horizontal direction
-  if (Angle()>1&&Angle()<359)
-  {
-   if (Angle()>=180) Rotate(360-Angle());
-   else Rotate(-Angle());
-   return;
-  }
+  //Set_Rotate(0.0);
 
   if (Velocity_X()>0){
-   Right_Thruster(1.0);
-   Left_Thruster(0.0);
+   Right_Thruster_robust(1.0);
+   Left_Thruster_robust(0.0);
   }
   else
   {
-   Left_Thruster(1.0);
-   Right_Thruster(0.0);
+   Left_Thruster_robust(1.0);
+   Right_Thruster_robust(0.0);
   }
  }
 
@@ -380,29 +474,164 @@ void Safety_Override(void)
  if (Velocity_Y()>5)      // Mind this! there is a reason for it...
  {
   for (int i=0; i<5; i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
+   if (SONAR_DIST[(i - offset) % 36]>-1&&SONAR_DIST[(i - offset) % 36]<dmin) 
+    dmin=SONAR_DIST[(i - offset) % 36];
   for (int i=32; i<36; i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
+   if (SONAR_DIST[(i - offset) % 36]>-1&&SONAR_DIST[(i - offset) % 36]<dmin) 
+    dmin=SONAR_DIST[(i - offset) % 36];
  }
  else
  {
   for (int i=14; i<22; i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
+   if (SONAR_DIST[(i - offset) % 36]>-1&&SONAR_DIST[(i - offset) % 36]<dmin) 
+    dmin=SONAR_DIST[(i - offset) % 36];
  }
- if (dmin<DistLimit)   // Too close to a surface in the horizontal direction
+ if (dmin<DistLimit)   // Too close to a surface in the vertical direction
  {
-  if (Angle()>1||Angle()>359)
-  {
-   if (Angle()>=180) Rotate(360-Angle());
-   else Rotate(-Angle());
-   return;
-  }
+  //Set_Rotate(0.0); 
   if (Velocity_Y()>2.0){
-   Main_Thruster(0.0);
+   Main_Thruster_robust(0.0);
   }
   else
   {
-   Main_Thruster(1.0);
+   Main_Thruster_robust(1.0);
   }
  }
 }
+
+double Velocity_X_robust() {
+
+ int i;
+
+ //if (fabs(Velocity_X() - Velocity_X()) > 1.0 || fabs(Velocity_X() - Velocity_X()) > 1.0 ) {
+ if (1) {
+  if (Angle() > 1  &&  Angle() < 359) {
+   if (Angle()>=180) Rotate(360-Angle());
+   else Rotate(-Angle());
+  }
+
+  double X_1 = RangeDist();
+
+  //sleep_milli(500); 
+  double X_2 = RangeDist();
+  
+  cout << X_2 << " ; " << X_1 << "\n";
+  cout << clock() << "\n";
+  return (X_2 - X_1) / 500;
+
+ } else return Velocity_X();
+}
+
+void find_velocity() {
+
+ if (first_loop < 2) {
+   vel_array[0] = vel_array[1];
+   vel_array[1] = Velocity_X();
+   first_loop++;
+ }
+}
+
+
+
+double Position_Y_robust() {
+
+ double dist;
+ if (fabs(Position_Y() - Position_Y()) > 1.0 || fabs(Position_Y() - Position_Y()) > 1.0 ) {
+  if (Angle() > 181  ||  Angle() < 179) {
+   if (Angle()>=180) {
+    Rotate(360-Angle());
+    dist = RangeDist();
+    Rotate(-(360-Angle()));
+   } else {
+    Rotate(-Angle());
+    dist = RangeDist();
+    Rotate(Angle());
+   }
+
+  } else {
+   dist = RangeDist();
+  }
+  return dist;
+ } else {
+  return Position_Y();
+ }
+}
+
+void Wait_Rotate(double dist) {
+
+ rotate_flag = 1;
+ des_angle = (double) (((int) (Angle() + dist)) % 360);
+ Rotate(dist);
+}
+
+void Main_Thruster_robust(double power) {
+ if (MT_OK) {
+  Set_Rotate(0.0);
+  Right_Thruster(0.0);
+  Left_Thruster(0.0);
+  Main_Thruster(power);
+ } else {
+  if (Working_Thruster() == 3) {
+   Left_Thruster(0);
+   Set_Rotate(90.0);
+   Working_Thruster_On(power);
+  } else {
+   Set_Rotate(270.0);
+   Right_Thruster(0);
+   Working_Thruster_On(power);
+  }
+ }
+}
+
+void Right_Thruster_robust(double power) {
+ if (RT_OK) {
+  Set_Rotate(0.0);
+  Left_Thruster(0.0);
+  Main_Thruster(0.0);
+  Right_Thruster(power);
+ } else {
+  if (Working_Thruster() == 1) {
+   Set_Rotate(270.0);
+   Left_Thruster(0.0);
+   Working_Thruster_On(power * (25/35));
+  } else {
+   Set_Rotate(180.0);
+   Working_Thruster_On(power);
+  }
+ }
+}
+
+void Left_Thruster_robust(double power) {
+ if (LT_OK) {
+  Set_Rotate(0.0);
+  Right_Thruster(0.0);
+  Main_Thruster(0.0);
+  Left_Thruster(power);
+ } else {
+  if (Working_Thruster() == 1) {
+   Set_Rotate(90.0);
+   Right_Thruster(0.0);
+   Working_Thruster_On(power * (25/35));
+  } else {
+   Set_Rotate(180.0);
+   Working_Thruster_On(power);
+  }
+ }
+}
+
+void Working_Thruster_On(double power) {
+ (MT_OK) ? Main_Thruster(power) : ((RT_OK) ? Right_Thruster(power) : Left_Thruster(power));
+}
+
+int Working_Thruster() { 
+ return (MT_OK) ? 1 : ((RT_OK) ? 3 : 2);
+}
+
+void Set_Rotate(double angle) {
+ (fabs(Angle() - angle) > 180.0) ? (((angle - Angle()) > 0.0) ? Rotate(-(360.0 - (angle - Angle()))) : Rotate((360.0 + (angle - Angle())))) : Rotate(-(Angle() - angle));
+}
+
+int Is_OK() {
+  return (MT_OK && RT_OK && LT_OK) ? 1 : 0;
+}
+
