@@ -174,6 +174,7 @@ int rotate_flag = 0;
 double des_angle;
 int safety = 0;
 int done = 0;
+int rotation_count = 0;
 
 double Velocity_X_robust();
 void Wait_Rotate(double angle);
@@ -242,11 +243,14 @@ void Lander_Control(void)
  double VXlim;
  double VYlim;
  
- 
- //Right_Thruster_robust(1.0);
- //Left_Thruster_robust(1.0);
- //Set_Rotate(45.0);
- //Right_Thruster_robust(1.0);
+  if (rotate_flag) {
+   rotation_count++;
+   if (rotation_count > 10) {
+    rotation_count = 0;
+    rotate_flag = 0;
+   } else return;
+  }
+  
  
    // Set velocity limits depending on distance to platform.
    // If the module is far from the platform allow it to
@@ -360,7 +364,7 @@ void Lander_Control(void)
     }
    }
 
-   if (fabs(Position_X() - PLAT_X) < 10 && (PLAT_Y - Position_Y()) < 20) {
+   if (fabs(Position_X() - PLAT_X) < 20 && (PLAT_Y - Position_Y()) < 20) {
     Left_Thruster(0);
     Right_Thruster(0);
     Main_Thruster(0);
@@ -408,6 +412,7 @@ void Safety_Override(void)
  double DistLimit;
  double Vmag;
  double dmin;
+ int i_picked;
 
  // Establish distance threshold based on lander
  // speed (we need more time to rectify direction
@@ -419,14 +424,14 @@ void Safety_Override(void)
 
  int offset = (((int) lround(Angle() / 10)) % 36);
 
- cout << SONAR_DIST[18] << " : " << RangeDist() << "\n";
+ 
 
  // If we're close to the landing platform, disable
  // safety override (close to the landing platform
  // the Control_Policy() should be trusted to
  // safely land the craft)
  if (fabs(PLAT_X-Position_X())<150&&fabs(PLAT_Y-Position_Y())<150) return;
-
+ 
  // Determine the closest surfaces in the direction
  // of motion. This is done by checking the sonar
  // array in the quadrant corresponding to the
@@ -438,14 +443,14 @@ void Safety_Override(void)
  if (Velocity_X()>0)
  {
   for (int i=5;i<14;i++)
-   if (SONAR_DIST[(i - offset) % 36]>-1&&SONAR_DIST[(i - offset) % 36]<dmin) 
-    dmin=SONAR_DIST[(i - offset) % 36];
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
+    dmin=SONAR_DIST[i];
  }
  else
  {
   for (int i = 22; i < 32; i++)
-   if (SONAR_DIST[(i - offset) % 36] > -1 && SONAR_DIST[(i - offset) % 36] < dmin) 
-    dmin=SONAR_DIST[(i - offset) % 36];
+   if (SONAR_DIST[i] > -1 && SONAR_DIST[i] < dmin) 
+    dmin=SONAR_DIST[i];
  }
  // Determine whether we're too close for comfort. There is a reason
  // to have this distance limit modulated by horizontal speed...
@@ -474,23 +479,25 @@ void Safety_Override(void)
  if (Velocity_Y()>5)      // Mind this! there is a reason for it...
  {
   for (int i=0; i<5; i++)
-   if (SONAR_DIST[(i - offset) % 36]>-1&&SONAR_DIST[(i - offset) % 36]<dmin) 
-    dmin=SONAR_DIST[(i - offset) % 36];
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
+    dmin=SONAR_DIST[i];
   for (int i=32; i<36; i++)
-   if (SONAR_DIST[(i - offset) % 36]>-1&&SONAR_DIST[(i - offset) % 36]<dmin) 
-    dmin=SONAR_DIST[(i - offset) % 36];
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
+    dmin=SONAR_DIST[i];
  }
  else
  {
   for (int i=14; i<22; i++)
-   if (SONAR_DIST[(i - offset) % 36]>-1&&SONAR_DIST[(i - offset) % 36]<dmin) 
-    dmin=SONAR_DIST[(i - offset) % 36];
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
+    dmin=SONAR_DIST[i];
  }
+
+
  if (dmin<DistLimit)   // Too close to a surface in the vertical direction
  {
   //Set_Rotate(0.0); 
   if (Velocity_Y()>2.0){
-   Main_Thruster_robust(0.0);
+   //Main_Thruster_robust(0.0);
   }
   else
   {
@@ -581,6 +588,7 @@ void Main_Thruster_robust(double power) {
    Working_Thruster_On(power);
   }
  }
+ rotate_flag = 1;
 }
 
 void Right_Thruster_robust(double power) {
@@ -599,6 +607,7 @@ void Right_Thruster_robust(double power) {
    Working_Thruster_On(power);
   }
  }
+ rotate_flag = 1;
 }
 
 void Left_Thruster_robust(double power) {
@@ -617,6 +626,7 @@ void Left_Thruster_robust(double power) {
    Working_Thruster_On(power);
   }
  }
+ rotate_flag = 1;
 }
 
 void Working_Thruster_On(double power) {
