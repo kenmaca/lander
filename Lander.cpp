@@ -171,6 +171,7 @@ using namespace std;
 double vel_array[3] = {0, 0, 0};
 int first_loop = 0;
 int rotate_flag = 0;
+int rotate_flag_safety = 0;
 double des_angle;
 int safety = 0;
 int done = 0;
@@ -243,12 +244,17 @@ void Lander_Control(void)
  double VXlim;
  double VYlim;
  
+ 
   if (rotate_flag) {
    rotation_count++;
    if (rotation_count > 10) {
     rotation_count = 0;
     rotate_flag = 0;
-   } else return;
+    rotate_flag_safety = 0;
+   } else {
+    rotate_flag_safety = 1;
+    return;
+   }
   }
   
  
@@ -364,7 +370,7 @@ void Lander_Control(void)
     }
    }
 
-   if (fabs(Position_X() - PLAT_X) < 20 && (PLAT_Y - Position_Y()) < 20) {
+   if (fabs(Position_X() - PLAT_X) < 40 && (PLAT_Y - Position_Y()) < 20) {
     Left_Thruster(0);
     Right_Thruster(0);
     Main_Thruster(0);
@@ -408,11 +414,12 @@ void Safety_Override(void)
 **************************************************/
 
  
- 
+
  double DistLimit;
  double Vmag;
  double dmin;
  int i_picked;
+ int j;
 
  // Establish distance threshold based on lander
  // speed (we need more time to rectify direction
@@ -424,7 +431,9 @@ void Safety_Override(void)
 
  int offset = (((int) lround(Angle() / 10)) % 36);
 
+ if (rotate_flag_safety) return;
  
+
 
  // If we're close to the landing platform, disable
  // safety override (close to the landing platform
@@ -438,39 +447,40 @@ void Safety_Override(void)
  // ship's motion direction to find the entry
  // with the smallest registered distance
 
- // Horizontal direction.
+ if (Is_OK()) {
+
+   // Horizontal direction.
  dmin=1000000;
  if (Velocity_X()>0)
  {
   for (int i=5;i<14;i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
-    dmin=SONAR_DIST[i];
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
  }
  else
  {
-  for (int i = 22; i < 32; i++)
-   if (SONAR_DIST[i] > -1 && SONAR_DIST[i] < dmin) 
-    dmin=SONAR_DIST[i];
+  for (int i=22;i<32;i++)
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
  }
  // Determine whether we're too close for comfort. There is a reason
  // to have this distance limit modulated by horizontal speed...
  // what is it?
-
-
- 
-
  if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
  { // Too close to a surface in the horizontal direction
-  //Set_Rotate(0.0);
+  if (Angle()>1&&Angle()<359)
+  {
+   if (Angle()>=180) Rotate(360-Angle());
+   else Rotate(-Angle());
+   return;
+  }
 
   if (Velocity_X()>0){
-   Right_Thruster_robust(1.0);
-   Left_Thruster_robust(0.0);
+   Right_Thruster(1.0);
+   Left_Thruster(0.0);
   }
   else
   {
-   Left_Thruster_robust(1.0);
-   Right_Thruster_robust(0.0);
+   Left_Thruster(1.0);
+   Right_Thruster(0.0);
   }
  }
 
@@ -479,31 +489,108 @@ void Safety_Override(void)
  if (Velocity_Y()>5)      // Mind this! there is a reason for it...
  {
   for (int i=0; i<5; i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
-    dmin=SONAR_DIST[i];
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
   for (int i=32; i<36; i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
-    dmin=SONAR_DIST[i];
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
  }
  else
  {
   for (int i=14; i<22; i++)
-   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
-    dmin=SONAR_DIST[i];
+   if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
  }
-
-
- if (dmin<DistLimit)   // Too close to a surface in the vertical direction
+ if (dmin<DistLimit)   // Too close to a surface in the horizontal direction
  {
-  //Set_Rotate(0.0); 
+  if (Angle()>1||Angle()>359)
+  {
+   if (Angle()>=180) Rotate(360-Angle());
+   else Rotate(-Angle());
+   return;
+  }
   if (Velocity_Y()>2.0){
-   //Main_Thruster_robust(0.0);
+   Main_Thruster(0.0);
   }
   else
   {
-   Main_Thruster_robust(1.0);
+   Main_Thruster(1.0);
   }
  }
+
+
+   } else {
+
+
+   // Horizontal direction.
+   dmin=1000000;
+   if (Velocity_X()>0)
+   {
+    for (int i=5;i<14;i++)
+     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
+     if (SONAR_DIST[j]>-1&&SONAR_DIST[j]<dmin) 
+      dmin=SONAR_DIST[j];
+   }
+   else
+   {
+    for (int i = 22; i < 32; i++)
+     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
+     if (SONAR_DIST[j] > -1 && SONAR_DIST[j] < dmin) 
+      dmin=SONAR_DIST[j];
+   }
+   // Determine whether we're too close for comfort. There is a reason
+   // to have this distance limit modulated by horizontal speed...
+   // what is it?
+
+
+   
+
+   if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
+   { // Too close to a surface in the horizontal direction
+    //Set_Rotate(0.0);
+
+    if (Velocity_X()>0){
+     Right_Thruster_robust(1.0);
+     //Left_Thruster_robust(0.0);
+    }
+    else
+    {
+     Left_Thruster_robust(1.0);
+     //Right_Thruster_robust(0.0);
+    }
+   }
+
+   // Vertical direction
+   dmin=1000000;
+   if (Velocity_Y()>5)      // Mind this! there is a reason for it...
+   {
+    for (int i=0; i<5; i++)
+     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
+     if (SONAR_DIST[j]>-1&&SONAR_DIST[j]<dmin) 
+      dmin=SONAR_DIST[j];
+    for (int i=32; i<36; i++)
+     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
+     if (SONAR_DIST[j]>-1&&SONAR_DIST[j]<dmin) 
+      dmin=SONAR_DIST[j];
+   }
+   else
+   {
+    for (int i=14; i<22; i++)
+     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
+     if (SONAR_DIST[j]>-1&&SONAR_DIST[j]<dmin) 
+      dmin=SONAR_DIST[j];
+   }
+
+
+   if (dmin<DistLimit)   // Too close to a surface in the vertical direction
+   {
+    //Set_Rotate(0.0); 
+    if (Velocity_Y()>2.0){
+     Main_Thruster_robust(0.0);
+    }
+    else
+    {
+     Main_Thruster_robust(1.0);
+    }
+   }
+  }
 }
 
 double Velocity_X_robust() {
@@ -581,11 +668,11 @@ void Main_Thruster_robust(double power) {
   if (Working_Thruster() == 3) {
    Left_Thruster(0);
    Set_Rotate(90.0);
-   Working_Thruster_On(power);
+   Right_Thruster(power);
   } else {
    Set_Rotate(270.0);
-   Right_Thruster(0);
-   Working_Thruster_On(power);
+   Right_Thruster(0.0);
+   Left_Thruster(power);
   }
  }
  rotate_flag = 1;
@@ -601,10 +688,10 @@ void Right_Thruster_robust(double power) {
   if (Working_Thruster() == 1) {
    Set_Rotate(270.0);
    Left_Thruster(0.0);
-   Working_Thruster_On(power * (25/35));
+   Main_Thruster(power * (25/35));
   } else {
    Set_Rotate(180.0);
-   Working_Thruster_On(power);
+   Left_Thruster(power);
   }
  }
  rotate_flag = 1;
@@ -620,10 +707,11 @@ void Left_Thruster_robust(double power) {
   if (Working_Thruster() == 1) {
    Set_Rotate(90.0);
    Right_Thruster(0.0);
-   Working_Thruster_On(power * (25/35));
+   Main_Thruster(power * (25/35));
   } else {
    Set_Rotate(180.0);
-   Working_Thruster_On(power);
+   Right_Thruster
+   (power);
   }
  }
  rotate_flag = 1;
