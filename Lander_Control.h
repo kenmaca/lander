@@ -29,6 +29,8 @@ void Main_Thruster(double power);
 void Left_Thruster(double power);
 void Right_Thruster(double power);
 void Rotate(double angle);
+void rotate(double degrees);
+double angleMod(double degrees);
 double Velocity_X(void);
 double Velocity_Y(void);
 double Position_X(void);

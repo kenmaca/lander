@@ -159,8 +159,24 @@
   Standard C libraries
 */
 #include <math.h>
-
+#include <iostream>
+#include <cmath>
 #include "Lander_Control.h"
+
+using namespace std;
+
+/*
+  0 - main
+  1 - left
+  2 - right
+  3 - up
+  4 - down
+  5 - rotate
+*/
+int mode = 0;
+double angle = 0;
+double x = -1;
+double y = -1;
 
 void Lander_Control(void)
 {
@@ -217,6 +233,10 @@ void Lander_Control(void)
  double VXlim;
  double VYlim;
 
+ // init current x and y
+ x = x == -1 ? Position_X() : x;
+ y = y == -1 ? Position_Y() : y;
+
  // Set velocity limits depending on distance to platform.
  // If the module is far from the platform allow it to
  // move faster, decrease speed limits as the module
@@ -245,45 +265,89 @@ void Lander_Control(void)
  // effect, i.e. the rotation angle does not accumulate
  // for successive calls.
 
- if (Angle()>1&&Angle()<359)
- {
-  if (Angle()>=180) Rotate(360-Angle());
-  else Rotate(-Angle());
-  return;
- }
+ switch(mode) {
 
- // Module is oriented properly, check for horizontal position
- // and set thrusters appropriately.
- if (Position_X()>PLAT_X)
- {
-  // Lander is to the LEFT of the landing platform, use Right thrusters to move
-  // lander to the left.
-  Left_Thruster(0);	// Make sure we're not fighting ourselves here!
-  if (Velocity_X()>(-VXlim)) Right_Thruster((VXlim+fmin(0,Velocity_X()))/VXlim);
-  else
-  {
-   // Exceeded velocity limit, brake
-   Right_Thruster(0);
-   Left_Thruster(fabs(VXlim-Velocity_X()));
-  }
- }
- else
- {
-  // Lander is to the RIGHT of the landing platform, opposite from above
-  Right_Thruster(0);
-  if (Velocity_X()<VXlim) Left_Thruster((VXlim-fmax(0,Velocity_X()))/VXlim);
-  else
-  {
-   Left_Thruster(0);
-   Right_Thruster(fabs(VXlim-Velocity_X()));
-  }
- }
+  // left
+  case 1:
+    break;
 
- // Vertical adjustments. Basically, keep the module below the limit for
- // vertical velocity and allow for continuous descent. We trust
- // Safety_Override() to save us from crashing with the ground.
- if (Velocity_Y()<VYlim) Main_Thruster(1.0);
- else Main_Thruster(0);
+  // right
+  case 2:
+    break;
+
+  // up
+  case 3:
+    break;
+
+  // down
+  case 4:
+    break;
+
+  // rotate
+  case 5:
+    if (Angle() > angle - 1 && Angle() < angle + 1) {
+      mode = 0;
+      cout << "rotate complete\n";
+    } else {
+      cout << "continue rotate: " << Angle() << "\n";
+      Rotate(Angle() >= angle + 180 ? angleMod(angle - Angle()) : - (angleMod(Angle() - angle)));
+    }
+    break;
+
+  // figure out what to do and hover
+  default:
+
+    if (Angle() > 10 && Angle() < 350) {
+      rotate(0.0);
+    }
+    
+    // hover
+    if (Position_X() < (x - 10)) {
+      Left_Thruster(0.27);
+    } else {
+      Left_Thruster(0.0);
+
+      // approach platform
+      if (x > (PLAT_X + 1)) {
+        x = x - 1;
+      }
+    }
+
+    if (Position_X() > (x + 10)) {
+      Right_Thruster(0.27);
+    } else {
+      Right_Thruster(0.0);
+
+      // approach platform
+      if (x < (PLAT_X - 1)) {
+        x = x + 1;
+      }
+    }
+
+    cout << Position_Y() << "\n";
+    cout << y << "\n";
+    if (Position_Y() > (y + 10)) {
+      cout << "start main: " << y << "\n";
+      Main_Thruster(0.3);
+    } else {
+      cout << "end main\n";
+      Main_Thruster(0.0);
+    }
+    break;
+ }
+}
+
+double angleMod(double degree) {
+  while (degree < 0)
+    degree += 360;
+  while (degree > 360)
+    degree -= 360;
+  return degree;
+}
+
+void rotate(double degree) {
+  mode = 5;
+  angle = degree;
 }
 
 void Safety_Override(void)
