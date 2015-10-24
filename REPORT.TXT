@@ -5,14 +5,14 @@ ______________________________________________________________________
 
 Team name:
 
-Name 1 (last, first):
-Student number 1:
+Name 1 (last, first): Usmani, Faisal
+Student number 1: 999003867
 
-Name 2 (last, first):
-Student number 2:
+Name 2 (last, first): Ma, Kenneth
+Student number 2: 995444675
 
 Name 3 (last, first):
-Student number 3:
+Student number 3: 999071917
 
 (special: Lose marks for not completing the above information)
 _______________________________________________________________________
@@ -23,19 +23,23 @@ you think the task could be completed
 
 a) The program can land the craft safely in mode '1'
   
-   - for the 'easy.ppm' map (yes/no)
-   - for the 'hard.ppm' map (yes/no)
+   - for the 'easy.ppm' map (yes/no) yes
+   - for the 'hard.ppm' map (yes/no) yes
 
    If it fails, describe the conditions in which it fails and how
    you think this could be resolved
 
 b) The program can land the craft safely in mode '2'
   
-   - for the 'easy.ppm' map (yes/no)
-   - for the 'hard.ppm' map (yes/no)
+   - for the 'easy.ppm' map (yes/no) no
+   - for the 'hard.ppm' map (yes/no) no
 
    If it fails, describe the conditions in which it fails and how
    you think this could be resolved
+
+   If the sensor for Angle, Position X/Y, or Velocity X/Y fail, then we'll have issues landing on the platform.
+   Our thrusters are robust, so to solve these sensor failure issues, we can make our sensors robust as well to 
+   solve all the sensor failure issues.
 
 _______________________________________________________________________
 
@@ -44,46 +48,71 @@ Questions:
 1) What was the impact of having noisy sensors in your ability to
    determine the state of the craft and ultimately control it 
    properly?
+   For position we had to specify a range to adjust our position instead of a specific value.
+   For our angle we had to constantly re-adjust ourselves.
 
 2) Describe the technique(s) you used to deal with sensor noise
+   We're planning on modelling our sensors and comparing the model with our results.
 
 3) Describe your strategy for dealing with thruster failures
+   We're selecting the closest working thruster, then rotating the lander so that the working thruster replaces the failed thruster.
 
 4) Describe your strategy for dealing with sensor malfunctions:
 
    - Position sensors
+        If the position sensors fail, them we can just keep track of y and x acceleration by integrating as a substitute.
    - Velocity sensors
+        If the velocity sensors fail, then we take 2 position readings and we determine the velocity using 
+        position(the difference between the 2 readings) and time.
    - Angle
+        We can resolve an angle failure by substituting by comparing the sonar readings with the range finder(laser)
+        and getting the angle that has a matching range from the sonar slices.
    - Sonar
+        2 ways of dealing with it.
+        1) Take a sonar reading the beginning since the sonar should be working. Cache the initial sonar readings and then use the rangefinder periodically update the corresponding sonar slice to the angle that the laser is when reading.
+        2) Use the laser to do a 360 degree scan and keep track of the distance of objects in every direction.
 
    What if you have multiple failures? what could you do if, for
    example both position and velocity sensors became inoperative?
+   Because everything is wrapped in robust functions, position will never fail since we're calculating this ourselves as above. Velocity depends on the actual velocity sensor or our substituted version that uses the position so this won't fail either. But note, it may be inaccurate since we're guessing where we are based on our initial position. The longer it takes to land, the more inaccurate the guess would be.
 
 5) What was the hardest failure type to deal with (i.e. which is
    the component, either sensor or control that makes the lander
    harder to handle?)?
+   An angle failure because the failure compensation of the other sensors greatly depends on the angle sensor.
 
 6) Assume a human pilot was in charge of controlling the craft 
    (i.e. the pilot has control of thrusters and rotation).
    How would you change Safety_Override() so that it prevents
    the pilot from accidentally crashing the lander?
-   
+   When Safety_Override() gets executed, we'd disable all the controls so that the pilot cannot overwrite any of the commands because that would cause more issues.
+
 7) Do you think it is reasonable to write such a control function?
    (i.e. a routine that takes control from a human for their
     own safety)
+    Yes, but to a certain degree; Only if it's absolutely required (i.e. danger is immenent).
 
 8) Should the pilot be aware that this software is present?
    (yes or no, and tell me why you think so!)
+   Yes he should know that the software is present because if the routine takes control from a human for their own safety, 
+   the human might panic and think that something's wrong with the program and would try to regain control (which might put him/her into danger).
 
 9) Would you buy/drive a car that you know has control software
    that will take control from you if it estimates you are
    doing something dangerous?
+   Yes because the software is more likely to keep everyone in the car safe.
 
 10) Can you as an embedded systems designer think of every 
     possible scenario that could go wrong so as to write 
     control software that ALWAYS works?
+    Hardware might degrade over time so the calculations done by the control software may not be as accurate as they should be.
+    Noise might be different in some environments compared to others, which also skews some calculations done by the control software.
+    There may even be a bug in the software that was never detected before and might take control of the system even in a non-dangerous situation.
+    No matter what you, you will not be able to replicate all real situations, there are infinitely many cases.
+    What if everything fails?
 
-    Think about that...
+    Think about that... 
+    Okay...
 ________________________________________________________________
 
 Grading:
