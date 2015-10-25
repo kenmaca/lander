@@ -176,6 +176,8 @@ double des_angle;
 int safety = 0;
 int done = 0;
 int rotation_count = 0;
+int angle_flag = 1;
+int angle = 0.0;
 
 double Velocity_X_robust();
 void Wait_Rotate(double angle);
@@ -243,6 +245,11 @@ void Lander_Control(void)
 
  double VXlim;
  double VYlim;
+
+  if (angle_flag) {
+   angle = Angle();
+   angle_flag = 0;
+  }
  
  
   if (rotate_flag) {
@@ -273,7 +280,7 @@ void Lander_Control(void)
 
    // Ensure we will be OVER the platform when we land
    if ( fabs(PLAT_X-Position_X())/fabs(Velocity_X()) > 
-    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y()) ) VYlim=0;
+    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y()) ) VYlim=-1.0;
 
   if (Is_OK()) {
    // IMPORTANT NOTE: The code below assumes all components working
@@ -363,14 +370,15 @@ void Lander_Control(void)
 
    } else {
     // Lander is to the RIGHT of the landing platform, opposite from above
-    if (Velocity_X()<VXlim) Left_Thruster_robust((VXlim-fmax(0,Velocity_X()))/VXlim);
+    if (Velocity_X()<VXlim) 
+     Left_Thruster_robust((VXlim-fmax(0,Velocity_X()))/VXlim);
     else
     {
      Right_Thruster_robust(fabs(VXlim-Velocity_X()));
     }
    }
 
-   if (fabs(Position_X() - PLAT_X) < 40 && (PLAT_Y - Position_Y()) < 20) {
+   if (fabs(Position_X() - PLAT_X) < 40 && (PLAT_Y - Position_Y()) < 25) {
     Left_Thruster(0);
     Right_Thruster(0);
     Main_Thruster(0);
@@ -427,9 +435,11 @@ void Safety_Override(void)
  Vmag=Velocity_X()*Velocity_X();
  Vmag+=Velocity_Y()*Velocity_Y();
 
- DistLimit=fmax(75,Vmag);
+ DistLimit=fmax(60,Vmag);
 
  int offset = (((int) lround(Angle() / 10)) % 36);
+
+
 
  if (rotate_flag_safety) return;
  
@@ -523,17 +533,17 @@ void Safety_Override(void)
    dmin=1000000;
    if (Velocity_X()>0)
    {
-    for (int i=5;i<14;i++)
-     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
-     if (SONAR_DIST[j]>-1&&SONAR_DIST[j]<dmin) 
-      dmin=SONAR_DIST[j];
+    for (int i=5;i<14;i++) {
+     if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
+      dmin=SONAR_DIST[i];
+    }
    }
    else
    {
-    for (int i = 22; i < 32; i++)
-     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
-     if (SONAR_DIST[j] > -1 && SONAR_DIST[j] < dmin) 
-      dmin=SONAR_DIST[j];
+    for (int i = 22; i < 32; i++) {
+     if (SONAR_DIST[i] > -1 && SONAR_DIST[i] < dmin) 
+      dmin=SONAR_DIST[i];
+    }
    }
    // Determine whether we're too close for comfort. There is a reason
    // to have this distance limit modulated by horizontal speed...
@@ -541,11 +551,9 @@ void Safety_Override(void)
 
 
    
-
    if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
    { // Too close to a surface in the horizontal direction
     //Set_Rotate(0.0);
-
     if (Velocity_X()>0){
      Right_Thruster_robust(1.0);
      //Left_Thruster_robust(0.0);
@@ -561,28 +569,30 @@ void Safety_Override(void)
    dmin=1000000;
    if (Velocity_Y()>5)      // Mind this! there is a reason for it...
    {
-    for (int i=0; i<5; i++)
-     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
-     if (SONAR_DIST[j]>-1&&SONAR_DIST[j]<dmin) 
-      dmin=SONAR_DIST[j];
-    for (int i=32; i<36; i++)
-     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
-     if (SONAR_DIST[j]>-1&&SONAR_DIST[j]<dmin) 
-      dmin=SONAR_DIST[j];
+    for (int i=0; i<5; i++) {
+     if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
+      dmin=SONAR_DIST[i];
+    }
+    for (int i=32; i<36; i++) {
+     j = ((i - offset)%36 < 0) ? 36 - (int) fabs((i - offset)%36): (i - offset)%36;
+     if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
+      dmin=SONAR_DIST[i];
+    }
    }
    else
    {
-    for (int i=14; i<22; i++)
-     j = ((i - offset)%36 < 0) ? 36 - (i - offset)%36 : (i - offset)%36;
-     if (SONAR_DIST[j]>-1&&SONAR_DIST[j]<dmin) 
-      dmin=SONAR_DIST[j];
+    for (int i=14; i<22; i++) {
+     if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
+      dmin=SONAR_DIST[i];
+     
+    }
    }
 
-
+   //cout << dmin << "\n";
    if (dmin<DistLimit)   // Too close to a surface in the vertical direction
    {
     //Set_Rotate(0.0); 
-    if (Velocity_Y()>2.0){
+    if (Velocity_Y()>1.0){
      Main_Thruster_robust(0.0);
     }
     else
@@ -710,8 +720,7 @@ void Left_Thruster_robust(double power) {
    Main_Thruster(power * (25/35));
   } else {
    Set_Rotate(180.0);
-   Right_Thruster
-   (power);
+   Right_Thruster(power);
   }
  }
  rotate_flag = 1;
