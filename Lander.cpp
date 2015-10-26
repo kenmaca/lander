@@ -245,7 +245,8 @@ void Lander_Control(void)
   }
  
 
-  // ret the lander rotate before turning one another truster. 
+
+  // let the lander rotate before turning on another truster. 
   if (rotate_flag) {
    rotation_count++;
    if (rotation_count > 10) {
@@ -259,6 +260,13 @@ void Lander_Control(void)
   }
   
  
+
+  if (!(fabs(PLAT_X-Position_X())<150) && sensor_count == ?) {
+    Rotate(360);
+
+  }
+
+
    // Set velocity limits depending on distance to platform.
    // If the module is far from the platform allow it to
    // move faster, decrease speed limits as the module
@@ -324,14 +332,13 @@ void Lander_Control(void)
     }
    }
    
-   //Wait_Rotate(45);
-   //cout << Position_Y_robust() << "\n";
-   // cout << Velocity_X_robust() << " : " << Velocity_X() << "\n";
+   
    // Vertical adjustments. Basically, keep the module below the limit for
    // vertical velocity and allow for continuous descent. We trust
    // Safety_Override() to save us from crashing with the ground.
    if (Velocity_Y()<VYlim) Main_Thruster(1.0);
    else Main_Thruster(0); 
+
   } else {
 
    if (done)
@@ -341,7 +348,7 @@ void Lander_Control(void)
     safety = 1;
    }
 
-   // turn on the main truster if the desend velocity is too high
+   // turn on the main truster if the descent velocity is too high
    if (safety) {
     if (Velocity_Y() < VYlim + fmin(4, 0.3*VYlim)) {
      Main_Thruster_robust(1.0);
