@@ -274,7 +274,7 @@ void Lander_Control(void)
 
    // Ensure we will be OVER the platform when we land
    if ( fabs(PLAT_X-Position_X())/fabs(Velocity_X()) > 
-    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y()) ) VYlim=-1.0;
+    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y()) ) VYlim=-3.0;
 
   if (Is_OK()) {
    // IMPORTANT NOTE: The code below assumes all components working
@@ -343,7 +343,7 @@ void Lander_Control(void)
 
    // turn on the main truster if the desend velocity is too high
    if (safety) {
-    if (Velocity_Y() < VYlim + 4) {
+    if (Velocity_Y() < VYlim + fmin(4, 0.3*VYlim)) {
      Main_Thruster_robust(1.0);
      return;
    } else
@@ -645,7 +645,7 @@ void Right_Thruster_robust(double power) {
   if (Working_Thruster() == 1) {
    Set_Rotate(270.0);
    Left_Thruster(0.0);
-   Main_Thruster(power * (25/35));
+   Main_Thruster(power);
   } else {
    Set_Rotate(180.0);
    Left_Thruster(power);
@@ -669,7 +669,7 @@ void Left_Thruster_robust(double power) {
   if (Working_Thruster() == 1) {
    Set_Rotate(90.0);
    Right_Thruster(0.0);
-   Main_Thruster(power * (25/35));
+   Main_Thruster(power);
   } else {
    Set_Rotate(180.0);
    Right_Thruster(power);
