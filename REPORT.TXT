@@ -3,7 +3,7 @@ CSCC85 - Embedded Systems
 Project 2 - Lander Control
 ______________________________________________________________________
 
-Team name:
+Team name: Paco Bell
 
 Name 1 (last, first): Usmani, Faisal
 Student number 1: 999003867
@@ -38,8 +38,10 @@ b) The program can land the craft safely in mode '2'
    you think this could be resolved
 
    If the sensor for Angle, Position X/Y, or Velocity X/Y fail, then we'll have issues landing on the platform.
-   Our thrusters are robust, so to solve these sensor failure issues, we can make our sensors robust as well to 
-   solve all the sensor failure issues.
+   Our thrusters are robust, so to solve these sensor failure issues, we can make our sensors robust as well to solve all the sensor failure issues.
+   For the angle sensor we plan to keep track of the angle, with a gaussian distribution for the noise, as the lander rotates.
+   For the Velocities we plan to keep track of the vertical and horizontal acceleration from which we can compute the velocities and position. 
+   FOr the sonar failure we plan to use the laser and make a 360 degree rotation to get the information about our surrounding.
 
 _______________________________________________________________________
 

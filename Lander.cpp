@@ -168,21 +168,14 @@ using namespace std;
 
 #include "Lander_Control.h"
 
-double vel_array[3] = {0, 0, 0};
-int first_loop = 0;
 int rotate_flag = 0;
 int rotate_flag_safety = 0;
-double des_angle;
 int safety = 0;
 int done = 0;
 int rotation_count = 0;
 int angle_flag = 1;
 int angle = 0.0;
 
-double Velocity_X_robust();
-void Wait_Rotate(double angle);
-void find_velocity();
-double Position_Y_robust();
 void Right_Thruster_robust(double power);
 void Working_Thruster_On(double power);
 int Working_Thruster();
@@ -251,7 +244,8 @@ void Lander_Control(void)
    angle_flag = 0;
   }
  
- 
+
+  // ret the lander rotate before turning one another truster. 
   if (rotate_flag) {
    rotation_count++;
    if (rotation_count > 10) {
@@ -347,6 +341,7 @@ void Lander_Control(void)
     safety = 1;
    }
 
+   // turn on the main truster if the desend velocity is too high
    if (safety) {
     if (Velocity_Y() < VYlim + 4) {
      Main_Thruster_robust(1.0);
@@ -378,6 +373,7 @@ void Lander_Control(void)
     }
    }
 
+   // if the lander is close enough to the platform prepare to land.
    if (fabs(Position_X() - PLAT_X) < 40 && (PLAT_Y - Position_Y()) < 25) {
     Left_Thruster(0);
     Right_Thruster(0);
@@ -603,72 +599,16 @@ void Safety_Override(void)
   }
 }
 
-double Velocity_X_robust() {
-
- int i;
-
- //if (fabs(Velocity_X() - Velocity_X()) > 1.0 || fabs(Velocity_X() - Velocity_X()) > 1.0 ) {
- if (1) {
-  if (Angle() > 1  &&  Angle() < 359) {
-   if (Angle()>=180) Rotate(360-Angle());
-   else Rotate(-Angle());
-  }
-
-  double X_1 = RangeDist();
-
-  //sleep_milli(500); 
-  double X_2 = RangeDist();
-  
-  cout << X_2 << " ; " << X_1 << "\n";
-  cout << clock() << "\n";
-  return (X_2 - X_1) / 500;
-
- } else return Velocity_X();
-}
-
-void find_velocity() {
-
- if (first_loop < 2) {
-   vel_array[0] = vel_array[1];
-   vel_array[1] = Velocity_X();
-   first_loop++;
- }
-}
 
 
 
-double Position_Y_robust() {
-
- double dist;
- if (fabs(Position_Y() - Position_Y()) > 1.0 || fabs(Position_Y() - Position_Y()) > 1.0 ) {
-  if (Angle() > 181  ||  Angle() < 179) {
-   if (Angle()>=180) {
-    Rotate(360-Angle());
-    dist = RangeDist();
-    Rotate(-(360-Angle()));
-   } else {
-    Rotate(-Angle());
-    dist = RangeDist();
-    Rotate(Angle());
-   }
-
-  } else {
-   dist = RangeDist();
-  }
-  return dist;
- } else {
-  return Position_Y();
- }
-}
-
-void Wait_Rotate(double dist) {
-
- rotate_flag = 1;
- des_angle = (double) (((int) (Angle() + dist)) % 360);
- Rotate(dist);
-}
 
 void Main_Thruster_robust(double power) {
+ /**
+	Function that adjust the angle of the lander, if the main 
+	thruster is not wroking, so that the right or the left 
+	thruster can be used instead.
+ */
  if (MT_OK) {
   Set_Rotate(0.0);
   Right_Thruster(0.0);
@@ -688,7 +628,14 @@ void Main_Thruster_robust(double power) {
  rotate_flag = 1;
 }
 
+
+
 void Right_Thruster_robust(double power) {
+ /**
+ Function that adjust the angle of the lander, if the right 
+ thruster is not wroking, so that the main or the left 
+ thruster can be used instead.
+ */
  if (RT_OK) {
   Set_Rotate(0.0);
   Left_Thruster(0.0);
@@ -708,6 +655,11 @@ void Right_Thruster_robust(double power) {
 }
 
 void Left_Thruster_robust(double power) {
+ /**
+ Function that adjust the angle of the lander, if the left 
+ thruster is not wroking, so that the main or the right 
+ thruster can be used instead.
+ */
  if (LT_OK) {
   Set_Rotate(0.0);
   Right_Thruster(0.0);
@@ -726,18 +678,29 @@ void Left_Thruster_robust(double power) {
  rotate_flag = 1;
 }
 
+
+// Turns on the main thruster with power power
 void Working_Thruster_On(double power) {
  (MT_OK) ? Main_Thruster(power) : ((RT_OK) ? Right_Thruster(power) : Left_Thruster(power));
 }
 
+/* Returns a number for the working thruster:
+   1 - if the main thruster is working
+   2 - if the left thruster is working
+   3 - if the right thruster is working
+*/
 int Working_Thruster() { 
  return (MT_OK) ? 1 : ((RT_OK) ? 3 : 2);
 }
 
+
+// Rotate the langer such that the angle of the lander is 
+// angle from the vertical clock wise
 void Set_Rotate(double angle) {
  (fabs(Angle() - angle) > 180.0) ? (((angle - Angle()) > 0.0) ? Rotate(-(360.0 - (angle - Angle()))) : Rotate((360.0 + (angle - Angle())))) : Rotate(-(Angle() - angle));
 }
 
+// Returns 1 of all thrusters are working
 int Is_OK() {
   return (MT_OK && RT_OK && LT_OK) ? 1 : 0;
 }
