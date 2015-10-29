@@ -174,11 +174,7 @@ int safety = 0;
 int done = 0;
 int rotation_count = 0;
 int angle_flag = 1;
-int velocity_flag = 1;
-double angle = 0.0;
-double time_step = 0.005;
-double power;
-int first_loop = 1;
+int angle = 0.0;
 
 void Right_Thruster_robust(double power);
 void Working_Thruster_On(double power);
@@ -187,8 +183,6 @@ void Set_Rotate(double angle);
 void Left_Thruster_robust(double power);
 void Main_Thruster_robust(double power);
 int Is_OK();
-void (*Thruster) (double);
-
 
 void Lander_Control(void)
 {
@@ -245,65 +239,26 @@ void Lander_Control(void)
  double VXlim;
  double VYlim;
 
-
-  if (first_loop) {
-   Thruster = Main_Thruster;
-   first_loop = 0;
+  if (angle_flag) {
+   angle = Angle();
+   angle_flag = 0;
   }
  
 
-
-
-
-  // let the lander rotate before turning on another truster. 
+  // ret the lander rotate before turning one another truster. 
   if (rotate_flag) {
-   if (fabs(Position_X() - PLAT_X) < 40 && (PLAT_Y - Position_Y()) < 20) {
-    Left_Thruster(0);
-    Right_Thruster(0);
-    Thruster(0);
-    Main_Thruster(0);
-    Set_Rotate(0.0);
-    done = 1;
+   rotation_count++;
+   if (rotation_count > 15) {
+    rotation_count = 0;
     rotate_flag = 0;
-    return;
-   } else if (fabs(angle - Angle()) > 2) {
-    Set_Rotate(angle);
     rotate_flag_safety = 0;
-    //Thruster(0.0);
-    return;
    } else {
     rotate_flag_safety = 1;
-    rotate_flag = 0;
-    cout << "Power: " << power << "\n";
-    Thruster(power);
+    return;
    }
   }
   
-
-
-  cout << "a\n";
-
-/*
- if (angle_flag) {
-  while(rotation_count < 800) {
-   cout << Velocity_X() << "\n";
-   rotation_count++;
-   angle_flag =1;
-  }
- }*/ 
-
-  
-/*
-  Set_Rotate(0.0);
-  cout << Velocity_X() << "\n";
-  return; */
-
-  //if (!(fabs(PLAT_X-Position_X())<150) && sensor_count == ?) {
-    //Rotate(360);
-
-  //}
-
-
+ 
    // Set velocity limits depending on distance to platform.
    // If the module is far from the platform allow it to
    // move faster, decrease speed limits as the module
@@ -319,7 +274,7 @@ void Lander_Control(void)
 
    // Ensure we will be OVER the platform when we land
    if ( fabs(PLAT_X-Position_X())/fabs(Velocity_X()) > 
-    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y()) ) VYlim=1;
+    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y()) ) VYlim=0.0;
 
   if (Is_OK()) {
    // IMPORTANT NOTE: The code below assumes all components working
@@ -369,13 +324,14 @@ void Lander_Control(void)
     }
    }
    
-   
+   //Wait_Rotate(45);
+   //cout << Position_Y_robust() << "\n";
+   // cout << Velocity_X_robust() << " : " << Velocity_X() << "\n";
    // Vertical adjustments. Basically, keep the module below the limit for
    // vertical velocity and allow for continuous descent. We trust
    // Safety_Override() to save us from crashing with the ground.
    if (Velocity_Y()<VYlim) Main_Thruster(1.0);
    else Main_Thruster(0); 
-
   } else {
 
    if (done)
@@ -385,7 +341,7 @@ void Lander_Control(void)
     safety = 1;
    }
 
-   // turn on the main truster if the descent velocity is too high
+   // turn on the main truster if the desend velocity is too high
    if (safety) {
     if (Velocity_Y() < VYlim + fmin(4, 0.3*VYlim)) {
      Main_Thruster_robust(1.0);
@@ -418,11 +374,9 @@ void Lander_Control(void)
    }
 
    // if the lander is close enough to the platform prepare to land.
-
-   if (fabs(Position_X() - PLAT_X) < 50 && (PLAT_Y - Position_Y()) < 50) {
+   if (fabs(Position_X() - PLAT_X) < 50 && (PLAT_Y - Position_Y()) < 25) {
     Left_Thruster(0);
     Right_Thruster(0);
-    Thruster(0);
     Main_Thruster(0);
     Set_Rotate(0.0);
     done = 1;
@@ -598,10 +552,12 @@ void Safety_Override(void)
     //Set_Rotate(0.0);
     if (Velocity_X()>0){
      Right_Thruster_robust(1.0);
+     //Left_Thruster_robust(0.0);
     }
     else
     {
      Left_Thruster_robust(1.0);
+     //Right_Thruster_robust(0.0);
     }
    }
 
@@ -647,94 +603,79 @@ void Safety_Override(void)
 
 
 
-void Main_Thruster_robust(double set_power) {
+void Main_Thruster_robust(double power) {
  /**
 	Function that adjust the angle of the lander, if the main 
 	thruster is not wroking, so that the right or the left 
 	thruster can be used instead.
  */
- //Thruster(0.0);
  if (MT_OK) {
   Set_Rotate(0.0);
-  angle = 0.0;
   Right_Thruster(0.0);
   Left_Thruster(0.0);
-  Thruster = Main_Thruster;
+  Main_Thruster(power);
  } else {
   if (Working_Thruster() == 3) {
    Left_Thruster(0);
    Set_Rotate(90.0);
-   angle = 90.0;
-   Thruster = Right_Thruster;
+   Right_Thruster(power);
   } else {
    Set_Rotate(270.0);
-   angle = 270.0;
    Right_Thruster(0.0);
-   Thruster = Left_Thruster;
+   Left_Thruster(power);
   }
  }
  rotate_flag = 1;
- power = set_power;
 }
 
 
 
-void Right_Thruster_robust(double set_power) {
+void Right_Thruster_robust(double power) {
  /**
  Function that adjust the angle of the lander, if the right 
  thruster is not wroking, so that the main or the left 
  thruster can be used instead.
  */
- //Thruster(0.0);
  if (RT_OK) {
   Set_Rotate(0.0);
-  angle = 0.0;
   Left_Thruster(0.0);
   Main_Thruster(0.0);
-  Thruster = Right_Thruster;
+  Right_Thruster(power);
  } else {
   if (Working_Thruster() == 1) {
    Set_Rotate(270.0);
-   angle = 270.0;
    Left_Thruster(0.0);
-   Thruster = Main_Thruster;
+   Main_Thruster(power);
   } else {
    Set_Rotate(180.0);
-   angle = 180.0;
-   Thruster = Left_Thruster;
+   Left_Thruster(power);
   }
  }
  rotate_flag = 1;
- power = set_power;
 }
 
-void Left_Thruster_robust(double set_power) {
+void Left_Thruster_robust(double power) {
  /**
  Function that adjust the angle of the lander, if the left 
  thruster is not wroking, so that the main or the right 
  thruster can be used instead.
  */
- //Thruster(0.0);
  if (LT_OK) {
   Set_Rotate(0.0);
   Right_Thruster(0.0);
-  angle = 0.0;
   Main_Thruster(0.0);
-  Thruster = Left_Thruster;
+  Left_Thruster(power);
  } else {
   if (Working_Thruster() == 1) {
    Set_Rotate(90.0);
-   angle = 90.0;
    Right_Thruster(0.0);
-   Thruster = Main_Thruster;
+   Main_Thruster(power);
   } else {
    Set_Rotate(180.0);
-   angle = 180.0;
-   Thruster = Right_Thruster;
+   Right_Thruster(power);
   }
  }
  rotate_flag = 1;
- power = set_power;
 }
 
 
