@@ -31,17 +31,12 @@ a) The program can land the craft safely in mode '1'
 
 b) The program can land the craft safely in mode '2'
   
-   - for the 'easy.ppm' map (yes/no) no
-   - for the 'hard.ppm' map (yes/no) no
+   - for the 'easy.ppm' map (yes/no) yes
+   - for the 'hard.ppm' map (yes/no) yes
 
    If it fails, describe the conditions in which it fails and how
    you think this could be resolved
 
-   If the sensor for Angle, Position X/Y, or Velocity X/Y fail, then we'll have issues landing on the platform.
-   Our thrusters are robust, so to solve these sensor failure issues, we can make our sensors robust as well to solve all the sensor failure issues.
-   For the angle sensor we plan to keep track of the angle, with a gaussian distribution for the noise, as the lander rotates.
-   For the Velocities we plan to keep track of the vertical and horizontal acceleration from which we can compute the velocities and position. 
-   FOr the sonar failure we plan to use the laser and make a 360 degree rotation to get the information about our surrounding.
 
 _______________________________________________________________________
 
@@ -54,21 +49,21 @@ Questions:
    For our angle we had to constantly re-adjust ourselves.
 
 2) Describe the technique(s) you used to deal with sensor noise
-   We're planning on modelling our sensors and comparing the model with our results.
+   To deal with sensor noise, we take an average of a bunch of samples.
+   We model our position and velocity sensors from the very beginning based on the same methods that are used if the sensors fail.
 
 3) Describe your strategy for dealing with thruster failures
    We're selecting the closest working thruster, then rotating the lander so that the working thruster replaces the failed thruster.
 
 4) Describe your strategy for dealing with sensor malfunctions:
-
    - Position sensors
-        If the position sensors fail, them we can just keep track of y and x acceleration by integrating as a substitute.
+        At the beginning, all the sensors are working, so we take the initial reading to the x and y position and we keep updating those values.
+        We take the velocity and integrate it (discretely) to keep track of the x and y position.
    - Velocity sensors
-        If the velocity sensors fail, then we take 2 position readings and we determine the velocity using 
-        position(the difference between the 2 readings) and time.
+        At the beginning, all sensors are working, so we take the initial reading for the x and y velocity and we keep updating those values.
+        We use the angle sensor in conjuction with one working thruster; We know the power that we give the thruster at all times so we can keep track of the acceleration. We break up the acceleration into x and y components and then we can integrate the acceleration (discretely) to get the velocity.
    - Angle
-        We can resolve an angle failure by substituting by comparing the sonar readings with the range finder(laser)
-        and getting the angle that has a matching range from the sonar slices.
+        We take an initial reading for angle. Given that our maximum rotate rate per frame is about 4.3 degrees, we just increment the initial reading based on how much we rotate.
    - Sonar
         2 ways of dealing with it.
         1) Take a sonar reading the beginning since the sonar should be working. Cache the initial sonar readings and then use the rangefinder periodically update the corresponding sonar slice to the angle that the laser is when reading.
@@ -81,18 +76,18 @@ Questions:
 5) What was the hardest failure type to deal with (i.e. which is
    the component, either sensor or control that makes the lander
    harder to handle?)?
-   An angle failure because the failure compensation of the other sensors greatly depends on the angle sensor.
-
+   Sonar is the hardest failure because you will never be able to maintain your x and y position while you use the laser to scan 360 degrees, you'll drop while rotating, making your scan slightly inaccurate.
 6) Assume a human pilot was in charge of controlling the craft 
    (i.e. the pilot has control of thrusters and rotation).
    How would you change Safety_Override() so that it prevents
    the pilot from accidentally crashing the lander?
-   When Safety_Override() gets executed, we'd disable all the controls so that the pilot cannot overwrite any of the commands because that would cause more issues.
+   When Safety_Override() gets executed, we'd disable all the controls so that the pilot cannot overwrite any of the commands because that would cause more issues. But we should also have a manual override button that lets you override the safety override temporarily for a few minutes; they can extend it by pressing the button again within that time period.
 
 7) Do you think it is reasonable to write such a control function?
    (i.e. a routine that takes control from a human for their
     own safety)
-    Yes, but to a certain degree; Only if it's absolutely required (i.e. danger is immenent).
+    Yes, but to a certain degree; Only if it's absolutely required (i.e. danger is immenent). 
+    Yes because we still give them the temporary override just incase the pilot feels that the computer is malfunctioning or that they can do a better job than the computer.
 
 8) Should the pilot be aware that this software is present?
    (yes or no, and tell me why you think so!)
@@ -110,8 +105,8 @@ Questions:
     Hardware might degrade over time so the calculations done by the control software may not be as accurate as they should be.
     Noise might be different in some environments compared to others, which also skews some calculations done by the control software.
     There may even be a bug in the software that was never detected before and might take control of the system even in a non-dangerous situation.
-    No matter what you, you will not be able to replicate all real situations, there are infinitely many cases.
-    What if everything fails?
+    No matter what you do, you will not be able to replicate all real situations, there are infinitely many cases.
+    For example, what if everything fails? 
 
     Think about that... 
     Okay...
