@@ -190,6 +190,9 @@ void Set_Rotate(double angle);
 void Left_Thruster_robust(double power);
 void Main_Thruster_robust(double power);
 int Is_OK();
+void update_param();
+double Velocity_X_robust();
+double Velocity_Y_robust();
 
 void Lander_Control(void)
 {
@@ -247,27 +250,7 @@ void Lander_Control(void)
  double VYlim;
  int p;
 
-  if (first_loop) {
-   int l, n = 1000;
-   double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0, sum_a = 0;
-   for (l = 0; l < n; l++) {
-    sum1 += Velocity_X();
-    sum2 += Velocity_Y();
-    sum3 += Position_X();
-    sum4 += Position_Y();
-   }
-   velocity[0] = sum1/n;
-   velocity[1] = sum2/n;
-   position[0] = sum3/n;
-   position[1] = sum4/n;
-   first_loop = 0;
-   //cout << Velocity_X() << " : " << velocity[0] << "\n";
-   //cout << Velocity_Y() << " : " << velocity[1] << "\n";
-   //cout << Position_X() << " : " << position[0] << "\n";
-   //cout << Position_Y() << " : " << position[1] << "\n";
-   //cout << Angle() << " : " << angle << "\n";
-  }
-
+  
 
 
   double sum = 0;
@@ -276,15 +259,18 @@ void Lander_Control(void)
   }
   angle = sum/1000;
 
+  //update_param();
+
 
   //Rotate(2.5);
-  cout << angle << "\n";
-  prev_angle = angle;
+  //cout << angle << "\n";
+  //prev_angle = angle;
 
   
   
   // ret the lander rotate before turning one another truster. 
   if (rotate_flag) {
+   update_param();
    rotation_count++;
    if (rotation_count > 10) {
     rotation_count = 0;
@@ -306,13 +292,13 @@ void Lander_Control(void)
    else if (fabs(Position_X()-PLAT_X)>100) VXlim=15;
    else VXlim=5;
 
-   if (PLAT_Y-Position_Y()>200) VYlim=-20;
-   else if (PLAT_Y-Position_Y()>100) VYlim=-10;  // These are negative because they
+   if (PLAT_Y-Position_Y()>200) VYlim=-10;
+   else if (PLAT_Y-Position_Y()>100) VYlim=-6;  // These are negative because they
    else VYlim=-4;				       // limit descent velocity
 
    // Ensure we will be OVER the platform when we land
-   if ( fabs(PLAT_X-Position_X())/fabs(Velocity_X()) > 
-    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y()) ) VYlim=0.0;
+   if ( fabs(PLAT_X-Position_X())/fabs(Velocity_X_robust()) > 
+    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y_robust()) ) VYlim=0.0;
 
   if (Is_OK()) {
    // IMPORTANT NOTE: The code below assumes all components working
@@ -371,18 +357,21 @@ void Lander_Control(void)
    if (Velocity_Y()<VYlim) Main_Thruster(1.0);
    else Main_Thruster(0); 
   } else {
+   //update_param();
 
-   if (done)
+   if (done) {
+    Set_Rotate(0.0);
     return;
+   }
 
-   if (Velocity_Y() < VYlim) { 
+   if (Velocity_Y_robust() < VYlim) { 
     safety = 1;
    }
 
    // turn on the main truster if the desend velocity is too high
    if (safety) {
-    if (Velocity_Y() < VYlim + fmin(4, 0.3*VYlim)) {
-     Main_Thruster_robust(1.0);
+    if (Velocity_Y_robust() < VYlim + fmin(2, 0.3*VYlim)) {
+     Main_Thruster_robust(0.7);
      return;
    } else
      safety = 0;
@@ -393,21 +382,21 @@ void Lander_Control(void)
     // Lander is to the LEFT of the landing platform, use Right thrusters to move
     // lander to the left.
     // Make sure we're not fighting ourselves here!
-    if (Velocity_X()>(-VXlim)) 
-      Right_Thruster_robust((VXlim+fmin(0,Velocity_X()))/VXlim);
+    if (Velocity_X_robust()>(-VXlim)) 
+      Right_Thruster_robust((VXlim+fmin(0,Velocity_X_robust()))/VXlim);
     else
     {
      // Exceeded velocity limit, brake
-     Left_Thruster_robust(fabs(VXlim-Velocity_X()));
+     Left_Thruster_robust(fabs(VXlim-Velocity_X_robust()));
     }
 
    } else {
     // Lander is to the RIGHT of the landing platform, opposite from above
-    if (Velocity_X()<VXlim) 
-     Left_Thruster_robust((VXlim-fmax(0,Velocity_X()))/VXlim);
+    if (Velocity_X_robust()<VXlim) 
+     Left_Thruster_robust((VXlim-fmax(0,Velocity_X_robust()))/VXlim);
     else
     {
-     Right_Thruster_robust(fabs(VXlim-Velocity_X()));
+     Right_Thruster_robust(fabs(VXlim-Velocity_X_robust()));
     }
    }
 
@@ -466,8 +455,8 @@ void Safety_Override(void)
  // Establish distance threshold based on lander
  // speed (we need more time to rectify direction
  // at high speed)
- Vmag=Velocity_X()*Velocity_X();
- Vmag+=Velocity_Y()*Velocity_Y();
+ Vmag=Velocity_X_robust()*Velocity_X_robust();
+ Vmag+=Velocity_Y_robust()*Velocity_Y_robust();
 
  DistLimit=fmax(60,Vmag);
 
@@ -565,7 +554,7 @@ void Safety_Override(void)
 
    // Horizontal direction.
    dmin=1000000;
-   if (Velocity_X()>0)
+   if (Velocity_X_robust()>0)
    {
     for (int i=5;i<14;i++) {
      if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
@@ -585,10 +574,10 @@ void Safety_Override(void)
 
 
    
-   if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
+   if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X_robust())/5.0,1)))
    { // Too close to a surface in the horizontal direction
     //Set_Rotate(0.0);
-    if (Velocity_X()>0){
+    if (Velocity_X_robust()>0){
      Right_Thruster_robust(1.0);
      //Left_Thruster_robust(0.0);
     }
@@ -601,7 +590,7 @@ void Safety_Override(void)
 
    // Vertical direction
    dmin=1000000;
-   if (Velocity_Y()>5)      // Mind this! there is a reason for it...
+   if (Velocity_Y_robust()>5)      // Mind this! there is a reason for it...
    {
     for (int i=0; i<5; i++) {
      if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) 
@@ -626,7 +615,7 @@ void Safety_Override(void)
    if (dmin<DistLimit)   // Too close to a surface in the vertical direction
    {
     //Set_Rotate(0.0); 
-    if (Velocity_Y()>1.0){
+    if (Velocity_Y_robust()>1.0){
      Main_Thruster_robust(0.0);
     }
     else
@@ -733,7 +722,7 @@ void Working_Thruster_On(double power) {
    3 - if the right thruster is working
 */
 int Working_Thruster() { 
- return (MT_OK) ? 1 : ((RT_OK) ? 3 : 2);
+ return (RT_OK) ? 1 : ((LT_OK) ? 3 : 2);
 }
 
 
@@ -749,9 +738,20 @@ int Is_OK() {
   return (MT_OK && RT_OK && LT_OK) ? 1 : 0;
 }
 
+/*
+double Accel_x() {
+
+ if (Is_OK) {
+
+ } else {
+  double a_x = -sin(((angle/90.0) + Working_Thruster())*(PI/2)) * (power*RT_ACCEL);
+ }
+}*/
 
 void update_param() {
-
+ double a_x = -sin(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
+ double a_y = -cos(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
+ a_y -= G_ACCEL;
  if (first_loop) {
    int l, n = 1000;
    double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0, sum_a = 0;
@@ -766,16 +766,38 @@ void update_param() {
    position[0] = sum3/n;
    position[1] = sum4/n;
    first_loop = 0;
-   //cout << Velocity_X() << " : " << velocity[0] << "\n";
-   //cout << Velocity_Y() << " : " << velocity[1] << "\n";
-   //cout << Position_X() << " : " << position[0] << "\n";
-   //cout << Position_Y() << " : " << position[1] << "\n";
-   //cout << Angle() << " : " << angle << "\n";
+   
   } else {
+   position[0] += velocity[0]*T_STEP*S_SCALE + (a_x*T_STEP)/2;
+   position[1] -= velocity[1]*T_STEP*S_SCALE - (a_y*T_STEP)/2;
+   velocity[0] += T_STEP*a_x;
+   velocity[1] += T_STEP*a_y;
 
-   velocity[0] += 
   }
-
-
+  cout << a_x << "\n";
+  cout << a_y << "\n";
+  cout << Velocity_X() << " : " << velocity[0] << " : " << Velocity_X() - velocity[0] << "\n";
+  cout << Velocity_Y() << " : " << velocity[1] << " : " << Velocity_Y() - velocity[1] << "\n";
+  cout << Position_X() << " : " << position[0] << " : " << Position_X() - position[0] << "\n";
+  cout << Position_Y() << " : " << position[1] << " : " << Position_Y() - position[1] << "\n";
 }
+
+
+double Velocity_X_robust() {
+ if (fabs(Velocity_X() - Velocity_X()) < 1 && fabs(Velocity_X() - Velocity_X()) < 1 && fabs(Velocity_X() - Velocity_X()) < 1) {
+  return velocity[0];
+ } else {
+  return velocity[0];
+ }
+}
+
+
+double Velocity_Y_robust() {
+ if (fabs(Velocity_Y() - Velocity_Y()) < 1 && fabs(Velocity_Y() - Velocity_Y()) < 1 && fabs(Velocity_Y() - Velocity_Y()) < 1) {
+  return velocity[1];
+ } else {
+  return velocity[1];
+ }
+}
+
 
