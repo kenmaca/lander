@@ -368,9 +368,9 @@ void Lander_Control(void)
     safety = 1;
    }
 
-   // turn on the main truster if the desend velocity is too high
+   // turn on the main truster if the desent velocity is too high
    if (safety) {
-    if (Velocity_Y_robust() < VYlim + fmin(2, 0.3*VYlim)) {
+    if (Velocity_Y_robust() < VYlim + fmin(3, 0.3*VYlim)) {
      Main_Thruster_robust(0.7);
      return;
    } else
@@ -401,7 +401,7 @@ void Lander_Control(void)
    }
 
    // if the lander is close enough to the platform prepare to land.
-   if (fabs(Position_X() - PLAT_X) < 50 && (PLAT_Y - Position_Y()) < 25) {
+   if (fabs(Position_X() - PLAT_X) < 50 && (PLAT_Y - Position_Y()) < 30) {
     Left_Thruster(0);
     Right_Thruster(0);
     Main_Thruster(0);
@@ -749,9 +749,19 @@ double Accel_x() {
 }*/
 
 void update_param() {
+
+ double sum = 0, vel;
+ int p;
+ for (p = 0; p < 1000; p++) {
+  sum += Velocity_X();
+ }
+ vel = sum/1000;
+
+
  double a_x = -sin(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
  double a_y = -cos(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
  a_y -= G_ACCEL;
+
  if (first_loop) {
    int l, n = 1000;
    double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0, sum_a = 0;
@@ -768,15 +778,20 @@ void update_param() {
    first_loop = 0;
    
   } else {
-   position[0] += velocity[0]*T_STEP*S_SCALE + (a_x*T_STEP)/2;
-   position[1] -= velocity[1]*T_STEP*S_SCALE - (a_y*T_STEP)/2;
+   //prev_angle =  - velocity[0];
+    // + (a_x*T_STEP*T_STEP)/2;
+    //- (a_y*T_STEP*T_STEP*S_SCALE)/2;
    velocity[0] += T_STEP*a_x;
    velocity[1] += T_STEP*a_y;
+   position[0] += velocity[0]*T_STEP*S_SCALE;
+   position[1] -= velocity[1]*T_STEP*S_SCALE;
 
   }
+  
+
   cout << a_x << "\n";
   cout << a_y << "\n";
-  cout << Velocity_X() << " : " << velocity[0] << " : " << Velocity_X() - velocity[0] << "\n";
+  cout << Velocity_X() << " : " << velocity[0] << " : " << (vel - velocity[0]) << "\n";
   cout << Velocity_Y() << " : " << velocity[1] << " : " << Velocity_Y() - velocity[1] << "\n";
   cout << Position_X() << " : " << position[0] << " : " << Position_X() - position[0] << "\n";
   cout << Position_Y() << " : " << position[1] << " : " << Position_Y() - position[1] << "\n";
