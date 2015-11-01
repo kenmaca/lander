@@ -174,7 +174,14 @@ int safety = 0;
 int done = 0;
 int rotation_count = 0;
 int angle_flag = 1;
-int angle = 0.0;
+double angle = 0.0;
+double prev_angle = 0.0;
+double power_ratio = 0.71428571428;
+double velocity [2];
+double position [2];
+int first_loop = 1;
+double dest_angle = 0.0;
+double power;
 
 void Right_Thruster_robust(double power);
 void Working_Thruster_On(double power);
@@ -238,17 +245,48 @@ void Lander_Control(void)
 
  double VXlim;
  double VYlim;
+ int p;
 
-  if (angle_flag) {
-   angle = Angle();
-   angle_flag = 0;
+  if (first_loop) {
+   int l, n = 1000;
+   double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0, sum_a = 0;
+   for (l = 0; l < n; l++) {
+    sum1 += Velocity_X();
+    sum2 += Velocity_Y();
+    sum3 += Position_X();
+    sum4 += Position_Y();
+   }
+   velocity[0] = sum1/n;
+   velocity[1] = sum2/n;
+   position[0] = sum3/n;
+   position[1] = sum4/n;
+   first_loop = 0;
+   //cout << Velocity_X() << " : " << velocity[0] << "\n";
+   //cout << Velocity_Y() << " : " << velocity[1] << "\n";
+   //cout << Position_X() << " : " << position[0] << "\n";
+   //cout << Position_Y() << " : " << position[1] << "\n";
+   //cout << Angle() << " : " << angle << "\n";
   }
- 
 
+
+
+  double sum = 0;
+  for (p = 0; p < 1000; p++) {
+   sum += Angle();
+  }
+  angle = sum/1000;
+
+
+  //Rotate(2.5);
+  cout << angle << "\n";
+  prev_angle = angle;
+
+  
+  
   // ret the lander rotate before turning one another truster. 
   if (rotate_flag) {
    rotation_count++;
-   if (rotation_count > 15) {
+   if (rotation_count > 10) {
     rotation_count = 0;
     rotate_flag = 0;
     rotate_flag_safety = 0;
@@ -258,7 +296,7 @@ void Lander_Control(void)
    }
   }
   
- 
+  
    // Set velocity limits depending on distance to platform.
    // If the module is far from the platform allow it to
    // move faster, decrease speed limits as the module
@@ -384,7 +422,7 @@ void Lander_Control(void)
    }  
 
 
-  }
+  } 
 } 
 
 void Safety_Override(void)
@@ -603,34 +641,35 @@ void Safety_Override(void)
 
 
 
-void Main_Thruster_robust(double power) {
+void Main_Thruster_robust(double set_power) {
  /**
 	Function that adjust the angle of the lander, if the main 
 	thruster is not wroking, so that the right or the left 
 	thruster can be used instead.
  */
- if (MT_OK) {
+ if (RT_OK) {
+  Set_Rotate(90.0);
+  Main_Thruster(0.0);
+  Left_Thruster(0.0);
+  Right_Thruster(set_power);
+ } else if (LT_OK) {
+  Set_Rotate(270.0);
+  Right_Thruster(0.0);
+  Main_Thruster(0.0);
+  Left_Thruster(set_power);
+ } else {
   Set_Rotate(0.0);
   Right_Thruster(0.0);
   Left_Thruster(0.0);
-  Main_Thruster(power);
- } else {
-  if (Working_Thruster() == 3) {
-   Left_Thruster(0);
-   Set_Rotate(90.0);
-   Right_Thruster(power);
-  } else {
-   Set_Rotate(270.0);
-   Right_Thruster(0.0);
-   Left_Thruster(power);
-  }
+  Main_Thruster(set_power * power_ratio);
  }
  rotate_flag = 1;
+ power = set_power;
 }
 
 
 
-void Right_Thruster_robust(double power) {
+void Right_Thruster_robust(double set_power) {
  /**
  Function that adjust the angle of the lander, if the right 
  thruster is not wroking, so that the main or the left 
@@ -638,44 +677,48 @@ void Right_Thruster_robust(double power) {
  */
  if (RT_OK) {
   Set_Rotate(0.0);
-  Left_Thruster(0.0);
   Main_Thruster(0.0);
-  Right_Thruster(power);
+  Left_Thruster(0.0);
+  Right_Thruster(set_power);
+ } else if (LT_OK) {
+  Set_Rotate(180.0);
+  Right_Thruster(0.0);
+  Main_Thruster(0.0);
+  Left_Thruster(set_power);
  } else {
-  if (Working_Thruster() == 1) {
-   Set_Rotate(270.0);
-   Left_Thruster(0.0);
-   Main_Thruster(power);
-  } else {
-   Set_Rotate(180.0);
-   Left_Thruster(power);
-  }
+  Set_Rotate(270.0);
+  Right_Thruster(0.0);
+  Left_Thruster(0.0);
+  Main_Thruster(set_power * power_ratio);
  }
  rotate_flag = 1;
+ power = set_power;
 }
 
-void Left_Thruster_robust(double power) {
+void Left_Thruster_robust(double set_power) {
  /**
  Function that adjust the angle of the lander, if the left 
  thruster is not wroking, so that the main or the right 
  thruster can be used instead.
  */
- if (LT_OK) {
+ if (RT_OK) {
+  Set_Rotate(180.0);
+  Main_Thruster(0.0);
+  Left_Thruster(0.0);
+  Right_Thruster(set_power);
+ } else if (LT_OK) {
   Set_Rotate(0.0);
   Right_Thruster(0.0);
   Main_Thruster(0.0);
-  Left_Thruster(power);
+  Left_Thruster(set_power);
  } else {
-  if (Working_Thruster() == 1) {
-   Set_Rotate(90.0);
-   Right_Thruster(0.0);
-   Main_Thruster(power);
-  } else {
-   Set_Rotate(180.0);
-   Right_Thruster(power);
-  }
+  Set_Rotate(90.0);
+  Right_Thruster(0.0);
+  Left_Thruster(0.0);
+  Main_Thruster(set_power * power_ratio);
  }
  rotate_flag = 1;
+ power = set_power;
 }
 
 
@@ -696,12 +739,43 @@ int Working_Thruster() {
 
 // Rotate the langer such that the angle of the lander is 
 // angle from the vertical clock wise
-void Set_Rotate(double angle) {
- (fabs(Angle() - angle) > 180.0) ? (((angle - Angle()) > 0.0) ? Rotate(-(360.0 - (angle - Angle()))) : Rotate((360.0 + (angle - Angle())))) : Rotate(-(Angle() - angle));
+void Set_Rotate(double des_angle) {
+ //(fabs(Angle() - angle) > 180.0) ? (((angle - Angle()) > 0.0) ? Rotate(-(360.0 - (angle - Angle()))) : Rotate((360.0 + (angle - Angle())))) : Rotate(-(Angle() - angle));
+ (fabs(angle - des_angle) > 180.0) ? (((des_angle - angle) > 0.0) ? Rotate(-(360.0 - (des_angle - angle))) : Rotate((360.0 + (des_angle - angle)))) : Rotate(-(angle - des_angle));
 }
 
 // Returns 1 of all thrusters are working
 int Is_OK() {
   return (MT_OK && RT_OK && LT_OK) ? 1 : 0;
+}
+
+
+void update_param() {
+
+ if (first_loop) {
+   int l, n = 1000;
+   double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0, sum_a = 0;
+   for (l = 0; l < n; l++) {
+    sum1 += Velocity_X();
+    sum2 += Velocity_Y();
+    sum3 += Position_X();
+    sum4 += Position_Y();
+   }
+   velocity[0] = sum1/n;
+   velocity[1] = sum2/n;
+   position[0] = sum3/n;
+   position[1] = sum4/n;
+   first_loop = 0;
+   //cout << Velocity_X() << " : " << velocity[0] << "\n";
+   //cout << Velocity_Y() << " : " << velocity[1] << "\n";
+   //cout << Position_X() << " : " << position[0] << "\n";
+   //cout << Position_Y() << " : " << position[1] << "\n";
+   //cout << Angle() << " : " << angle << "\n";
+  } else {
+
+   velocity[0] += 
+  }
+
+
 }
 
