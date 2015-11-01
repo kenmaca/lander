@@ -183,6 +183,7 @@ int first_loop = 1;
 double dest_angle = 0.0;
 double power;
 
+
 void Right_Thruster_robust(double power);
 void Working_Thruster_On(double power);
 int Working_Thruster();
@@ -327,24 +328,24 @@ void Lander_Control(void)
     // Lander is to the LEFT of the landing platform, use Right thrusters to move
     // lander to the left.
     Left_Thruster(0.0);	// Make sure we're not fighting ourselves here!
-    if (Velocity_X()>(-VXlim)) 
-      Right_Thruster((VXlim+fmin(0,Velocity_X()))/VXlim);
+    if (Velocity_X_robust()>(-VXlim)) 
+      Right_Thruster((VXlim+fmin(0,Velocity_X_robust()))/VXlim);
     else
     {
      // Exceeded velocity limit, brake
      Right_Thruster(0.0);
-     Left_Thruster(fabs(VXlim-Velocity_X()));
+     Left_Thruster(fabs(VXlim-Velocity_X_robust()));
     }
    }
    else
    {
     // Lander is to the RIGHT of the landing platform, opposite from above
     Right_Thruster(0);
-    if (Velocity_X()<VXlim) Left_Thruster((VXlim-fmax(0,Velocity_X()))/VXlim);
+    if (Velocity_X_robust()<VXlim) Left_Thruster((VXlim-fmax(0,Velocity_X_robust()))/VXlim);
     else
     {
      Left_Thruster(0);
-     Right_Thruster(fabs(VXlim-Velocity_X()));
+     Right_Thruster(fabs(VXlim-Velocity_X_robust()));
     }
    }
    
@@ -354,7 +355,7 @@ void Lander_Control(void)
    // Vertical adjustments. Basically, keep the module below the limit for
    // vertical velocity and allow for continuous descent. We trust
    // Safety_Override() to save us from crashing with the ground.
-   if (Velocity_Y()<VYlim) Main_Thruster(1.0);
+   if (Velocity_Y_robust()<VYlim) Main_Thruster(1.0);
    else Main_Thruster(0); 
   } else {
    //update_param();
@@ -484,7 +485,7 @@ void Safety_Override(void)
 
    // Horizontal direction.
  dmin=1000000;
- if (Velocity_X()>0)
+ if (Velocity_X_robust()>0)
  {
   for (int i=5;i<14;i++)
    if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
@@ -497,7 +498,7 @@ void Safety_Override(void)
  // Determine whether we're too close for comfort. There is a reason
  // to have this distance limit modulated by horizontal speed...
  // what is it?
- if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X())/5.0,1)))
+ if (dmin<DistLimit*fmax(.25,fmin(fabs(Velocity_X_robust())/5.0,1)))
  { // Too close to a surface in the horizontal direction
   if (Angle()>1&&Angle()<359)
   {
@@ -506,7 +507,7 @@ void Safety_Override(void)
    return;
   }
 
-  if (Velocity_X()>0){
+  if (Velocity_X_robust()>0){
    Right_Thruster(1.0);
    Left_Thruster(0.0);
   }
@@ -519,7 +520,7 @@ void Safety_Override(void)
 
  // Vertical direction
  dmin=1000000;
- if (Velocity_Y()>5)      // Mind this! there is a reason for it...
+ if (Velocity_Y_robust()>5)      // Mind this! there is a reason for it...
  {
   for (int i=0; i<5; i++)
    if (SONAR_DIST[i]>-1&&SONAR_DIST[i]<dmin) dmin=SONAR_DIST[i];
@@ -539,7 +540,7 @@ void Safety_Override(void)
    else Rotate(-Angle());
    return;
   }
-  if (Velocity_Y()>2.0){
+  if (Velocity_Y_robust()>2.0){
    Main_Thruster(0.0);
   }
   else
@@ -666,18 +667,18 @@ void Right_Thruster_robust(double set_power) {
  */
  if (RT_OK) {
   Set_Rotate(0.0);
-  Main_Thruster(0.0);
-  Left_Thruster(0.0);
+  //Main_Thruster(0.0);
+  //Left_Thruster(0.0);
   Right_Thruster(set_power);
  } else if (LT_OK) {
   Set_Rotate(180.0);
-  Right_Thruster(0.0);
-  Main_Thruster(0.0);
+  //Right_Thruster(0.0);
+  //Main_Thruster(0.0);
   Left_Thruster(set_power);
  } else {
   Set_Rotate(270.0);
-  Right_Thruster(0.0);
-  Left_Thruster(0.0);
+  //Right_Thruster(0.0);
+  //Left_Thruster(0.0);
   Main_Thruster(set_power * power_ratio);
  }
  rotate_flag = 1;
@@ -692,18 +693,18 @@ void Left_Thruster_robust(double set_power) {
  */
  if (RT_OK) {
   Set_Rotate(180.0);
-  Main_Thruster(0.0);
-  Left_Thruster(0.0);
+  Main_Thruster(-10);
+  //Left_Thruster(0.0);
   Right_Thruster(set_power);
  } else if (LT_OK) {
   Set_Rotate(0.0);
-  Right_Thruster(0.0);
-  Main_Thruster(0.0);
+  //Right_Thruster(0.0);
+  //Main_Thruster(0.0);
   Left_Thruster(set_power);
  } else {
   Set_Rotate(90.0);
-  Right_Thruster(0.0);
-  Left_Thruster(0.0);
+  //Right_Thruster(0.0);
+  //Left_Thruster(0.0);
   Main_Thruster(set_power * power_ratio);
  }
  rotate_flag = 1;
@@ -735,7 +736,7 @@ void Set_Rotate(double des_angle) {
 
 // Returns 1 of all thrusters are working
 int Is_OK() {
-  return (MT_OK && RT_OK && LT_OK) ? 1 : 0;
+  return (MT_OK && RT_OK && LT_OK) ? 0 : 0;
 }
 
 /*
@@ -750,12 +751,18 @@ double Accel_x() {
 
 void update_param() {
 
- double sum = 0, vel;
+ double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0, velx, posx, vely, posy;
  int p;
- for (p = 0; p < 1000; p++) {
-  sum += Velocity_X();
+ for (p = 0; p < 5000; p++) {
+  sum1 += Velocity_X();
+  sum2 += Position_X();
+  sum3 += Velocity_Y();
+  sum4 += Position_Y();
  }
- vel = sum/1000;
+ velx = sum1/5000;
+ vely = sum3/5000;
+ posx = sum2/5000;
+ posy = sum4/5000;
 
 
  double a_x = -sin(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
@@ -777,6 +784,7 @@ void update_param() {
    position[1] = sum4/n;
    first_loop = 0;
    
+
   } else {
    //prev_angle =  - velocity[0];
     // + (a_x*T_STEP*T_STEP)/2;
@@ -791,11 +799,14 @@ void update_param() {
 
   cout << a_x << "\n";
   cout << a_y << "\n";
-  cout << Velocity_X() << " : " << velocity[0] << " : " << (vel - velocity[0]) << "\n";
-  cout << Velocity_Y() << " : " << velocity[1] << " : " << Velocity_Y() - velocity[1] << "\n";
-  cout << Position_X() << " : " << position[0] << " : " << Position_X() - position[0] << "\n";
-  cout << Position_Y() << " : " << position[1] << " : " << Position_Y() - position[1] << "\n";
+  cout << Velocity_X() << " : " << velocity[0] << " : " << (velx - velocity[0]) << "\n";
+  cout << Velocity_Y() << " : " << velocity[1] << " : " << (vely - velocity[1]) << "\n";
+  cout << Position_X() << " : " << position[0] << " : " << posx - position[0] << "\n";
+  cout << Position_Y() << " : " << position[1] << " : " << posy - position[1] << "\n";
 }
+
+
+
 
 
 double Velocity_X_robust() {
@@ -814,5 +825,8 @@ double Velocity_Y_robust() {
   return velocity[1];
  }
 }
+
+
+
 
 
