@@ -160,9 +160,9 @@
 */
 #include <math.h>
 #include <iostream>
-#include <ctime>
-//#include <stdlib.h>
-#include <unistd.h>
+// #include <ctime>
+#include <stdlib.h>
+// #include <unistd.h>
 using namespace std;
 
 
@@ -178,10 +178,18 @@ double angle = 0.0;
 double prev_angle = 0.0;
 double power_ratio = 0.71428571428;
 double velocity [2];
+double velx, vely, posx, posy;
 double position [2];
+double position_v [2];
 int first_loop = 1;
 double dest_angle = 0.0;
+double main_power;
+double left_power;
+double right_power;
 double power;
+double bs_const = 0.02359;
+double bs_const_h = 0.0283;
+int landing_flag = 1;
 
 
 void Right_Thruster_robust(double power);
@@ -194,6 +202,10 @@ int Is_OK();
 void update_param();
 double Velocity_X_robust();
 double Velocity_Y_robust();
+double get_Y_acc();
+double get_X_acc();
+double Position_X_robust();
+double Position_Y_robust();
 
 void Lander_Control(void)
 {
@@ -267,6 +279,8 @@ void Lander_Control(void)
   //cout << angle << "\n";
   //prev_angle = angle;
 
+
+
   
   
   // ret the lander rotate before turning one another truster. 
@@ -282,24 +296,46 @@ void Lander_Control(void)
     return;
    }
   }
+
+
+  // if (done && !rotate_flag && landing_flag) {
+  //   Set_Rotate(0.0);
+  //   landing_flag = 0;
+  //   return;
+  // }
   
-  
+  /*
+  Set_Rotate(0.0);
+  //Left_Thruster(0.0);
+  //Main_Thruster(0.0);
+  Right_Thruster(1.0);
+
+  rotate_flag = 1;
+  main_power = 0;
+  left_power = 0;
+  right_power = 1;
+  power = 0;
+
+  */
+
+
    // Set velocity limits depending on distance to platform.
    // If the module is far from the platform allow it to
    // move faster, decrease speed limits as the module
    // approaches landing. You may need to be more conservative
    // with velocity limits when things fail.
-   if (fabs(Position_X()-PLAT_X)>200) VXlim=25;
-   else if (fabs(Position_X()-PLAT_X)>100) VXlim=15;
+   if (fabs(Position_X_robust()-PLAT_X)>200) VXlim=25;
+   else if (fabs(Position_X_robust()-PLAT_X)>100) VXlim=15;
    else VXlim=5;
 
-   if (PLAT_Y-Position_Y()>200) VYlim=-10;
-   else if (PLAT_Y-Position_Y()>100) VYlim=-6;  // These are negative because they
+   if (PLAT_Y-Position_Y_robust()>200 && fabs(Position_X_robust()-PLAT_X) > 100) VYlim=0.0;
+   else if (PLAT_Y-Position_Y_robust()>200) VYlim=-10;
+   else if (PLAT_Y-Position_Y_robust()>100) VYlim=-6;  // These are negative because they
    else VYlim=-4;				       // limit descent velocity
 
    // Ensure we will be OVER the platform when we land
-   if ( fabs(PLAT_X-Position_X())/fabs(Velocity_X_robust()) > 
-    1.25*fabs(PLAT_Y-Position_Y())/fabs(Velocity_Y_robust()) ) VYlim=0.0;
+   if ( fabs(PLAT_X-Position_X_robust())/fabs(Velocity_X_robust()) > 
+    1.25*fabs(PLAT_Y-Position_Y_robust())/fabs(Velocity_Y_robust()) ) VYlim=0.0;
 
   if (Is_OK()) {
    // IMPORTANT NOTE: The code below assumes all components working
@@ -362,6 +398,7 @@ void Lander_Control(void)
 
    if (done) {
     Set_Rotate(0.0);
+    Main_Thruster(0.2);
     return;
    }
 
@@ -378,7 +415,7 @@ void Lander_Control(void)
      safety = 0;
    }
 
-   if (Position_X()>PLAT_X)
+   if (Position_X_robust()>PLAT_X)
    {
     // Lander is to the LEFT of the landing platform, use Right thrusters to move
     // lander to the left.
@@ -402,7 +439,7 @@ void Lander_Control(void)
    }
 
    // if the lander is close enough to the platform prepare to land.
-   if (fabs(Position_X() - PLAT_X) < 50 && (PLAT_Y - Position_Y()) < 30) {
+   if (fabs(Position_X_robust() - PLAT_X) < 50 && (PLAT_Y - Position_Y_robust()) < 30) {
     Left_Thruster(0);
     Right_Thruster(0);
     Main_Thruster(0);
@@ -465,6 +502,8 @@ void Safety_Override(void)
 
 
 
+ //cout << SONAR_DIST[0] << ", " << SONAR_DIST[9] << ", " << SONAR_DIST[18] << ", " << SONAR_DIST[27] << "\n";
+
  if (rotate_flag_safety) return;
  
 
@@ -473,7 +512,7 @@ void Safety_Override(void)
  // safety override (close to the landing platform
  // the Control_Policy() should be trusted to
  // safely land the craft)
- if (fabs(PLAT_X-Position_X())<150&&fabs(PLAT_Y-Position_Y())<150) return;
+ if (fabs(PLAT_X-Position_X_robust())<150&&fabs(PLAT_Y-Position_Y_robust())<150) return;
  
  // Determine the closest surfaces in the direction
  // of motion. This is done by checking the sonar
@@ -642,19 +681,27 @@ void Main_Thruster_robust(double set_power) {
   Main_Thruster(0.0);
   Left_Thruster(0.0);
   Right_Thruster(set_power);
+  main_power = 0.0;
+  left_power = 0.0;
+  right_power = set_power;
  } else if (LT_OK) {
   Set_Rotate(270.0);
   Right_Thruster(0.0);
   Main_Thruster(0.0);
   Left_Thruster(set_power);
+  right_power = 0.0;
+  main_power = 0.0;
+  left_power = set_power;
  } else {
   Set_Rotate(0.0);
   Right_Thruster(0.0);
   Left_Thruster(0.0);
   Main_Thruster(set_power * power_ratio);
+  right_power = 0.0;
+  left_power = 0.0;
+  main_power = set_power;
  }
  rotate_flag = 1;
- power = set_power;
 }
 
 
@@ -667,22 +714,30 @@ void Right_Thruster_robust(double set_power) {
  */
  if (RT_OK) {
   Set_Rotate(0.0);
-  //Main_Thruster(0.0);
-  //Left_Thruster(0.0);
+  Main_Thruster(0.0);
+  Left_Thruster(0.0);
   Right_Thruster(set_power);
+  main_power = 0.0;
+  left_power = 0.0;
+  right_power = set_power;
  } else if (LT_OK) {
   Set_Rotate(180.0);
-  //Right_Thruster(0.0);
-  //Main_Thruster(0.0);
+  Right_Thruster(0.0);
+  Main_Thruster(0.0);
   Left_Thruster(set_power);
+  right_power = 0.0;
+  main_power = 0.0;
+  left_power = set_power;
  } else {
   Set_Rotate(270.0);
-  //Right_Thruster(0.0);
-  //Left_Thruster(0.0);
+  Right_Thruster(0.0);
+  Left_Thruster(0.0);
   Main_Thruster(set_power * power_ratio);
+  right_power = 0.0;
+  left_power = 0.0;
+  main_power = set_power;
  }
  rotate_flag = 1;
- power = set_power;
 }
 
 void Left_Thruster_robust(double set_power) {
@@ -694,21 +749,29 @@ void Left_Thruster_robust(double set_power) {
  if (RT_OK) {
   Set_Rotate(180.0);
   Main_Thruster(-10);
-  //Left_Thruster(0.0);
+  Left_Thruster(0.0);
   Right_Thruster(set_power);
+  main_power = 0.0;
+  left_power = 0.0;
+  right_power = set_power;
  } else if (LT_OK) {
   Set_Rotate(0.0);
-  //Right_Thruster(0.0);
-  //Main_Thruster(0.0);
+  Right_Thruster(0.0);
+  Main_Thruster(0.0);
   Left_Thruster(set_power);
+  right_power = 0.0;
+  main_power = 0.0;
+  left_power = set_power;
  } else {
   Set_Rotate(90.0);
-  //Right_Thruster(0.0);
-  //Left_Thruster(0.0);
+  Right_Thruster(0.0);
+  Left_Thruster(0.0);
   Main_Thruster(set_power * power_ratio);
+  right_power = 0.0;
+  left_power = 0.0;
+  main_power = set_power;
  }
  rotate_flag = 1;
- power = set_power;
 }
 
 
@@ -751,7 +814,9 @@ double Accel_x() {
 
 void update_param() {
 
- double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0, velx, posx, vely, posy;
+ 
+
+ double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0;
  int p;
  for (p = 0; p < 5000; p++) {
   sum1 += Velocity_X();
@@ -765,11 +830,14 @@ void update_param() {
  posy = sum4/5000;
 
 
- double a_x = -sin(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
- double a_y = -cos(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
- a_y -= G_ACCEL;
+ //double a_x = -sin(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
+ //double a_y = -cos(((angle/90.0) + Working_Thruster())*(PI/2)) * fmin((power*RT_ACCEL),RT_ACCEL);
+ //a_y -= G_ACCEL;
 
- if (first_loop) {
+ double a_x = get_X_acc();
+ double a_y = get_Y_acc();
+
+ if (first_loop < 20) {
    int l, n = 1000;
    double sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0, sum_a = 0;
    for (l = 0; l < n; l++) {
@@ -781,36 +849,59 @@ void update_param() {
    velocity[0] = sum1/n;
    velocity[1] = sum2/n;
    position[0] = sum3/n;
+   position_v[0] = sum3/n;
    position[1] = sum4/n;
-   first_loop = 0;
+   position_v[1] = sum4/n;
+   first_loop++;
+   Left_Thruster(0.0);
+   Right_Thruster(0.0);
+   Main_Thruster(0.0);
    
 
   } else {
-   //prev_angle =  - velocity[0];
-    // + (a_x*T_STEP*T_STEP)/2;
-    //- (a_y*T_STEP*T_STEP*S_SCALE)/2;
+
+
    velocity[0] += T_STEP*a_x;
    velocity[1] += T_STEP*a_y;
-   position[0] += velocity[0]*T_STEP*S_SCALE;
-   position[1] -= velocity[1]*T_STEP*S_SCALE;
+   position[0] += velocity[0]*T_STEP*S_SCALE + ((double)rand()/RAND_MAX - 0.5);
+   position[1] -= velocity[1]*T_STEP*S_SCALE - ((double)rand()/RAND_MAX - 0.5);
+   position_v[0] += velx*T_STEP*S_SCALE;
+   position_v[1] -= vely*T_STEP*S_SCALE;
 
   }
   
+  
+  // cout << ((double)rand()/RAND_MAX - 0.5) << "\n";
 
-  cout << a_x << "\n";
-  cout << a_y << "\n";
-  cout << Velocity_X() << " : " << velocity[0] << " : " << (velx - velocity[0]) << "\n";
-  cout << Velocity_Y() << " : " << velocity[1] << " : " << (vely - velocity[1]) << "\n";
-  cout << Position_X() << " : " << position[0] << " : " << posx - position[0] << "\n";
-  cout << Position_Y() << " : " << position[1] << " : " << posy - position[1] << "\n";
+  
+  // cout << a_x << "\n";
+  // cout << a_y << "\n";
+  // cout << velx << " : " << velocity[0] << " : " << (velx - velocity[0]) << "\n";
+  // cout << vely << " : " << velocity[1] << " : " << (vely - velocity[1]) << "\n";
+  // cout << posx << " : " << position[0] << " : " << posx - position[0] << "\n";
+  // cout << posy << " : " << position[1] << " : " << posy - position[1] << "\n";
+  
 }
 
 
 
 
+double get_Y_acc() {
+    double a_y = -cos(((angle/90.0 + 1))*(PI/2)) * fmin(((right_power+RT_OK * (right_power*-0.06 + bs_const_h))*RT_ACCEL),RT_ACCEL);
+    a_y += -cos(((angle/90.0) + 2)*(PI/2)) * fmin(((main_power+MT_OK * (main_power*-0.053 + bs_const))*RT_ACCEL),RT_ACCEL);
+    a_y += -cos(((angle/90.0) + 3)*(PI/2)) * fmin(((left_power+LT_OK*(left_power*-0.06 + bs_const_h))*LT_ACCEL),LT_ACCEL);
+    return a_y - G_ACCEL;
+}
+
+double get_X_acc() {
+    double a_x = -sin(((angle/90.0 + 1))*(PI/2)) * fmin(((right_power+RT_OK * (right_power*-0.06 + bs_const_h))*RT_ACCEL),RT_ACCEL);
+    a_x += -sin(((angle/90.0) + 2)*(PI/2)) * fmin(((main_power+MT_OK * (main_power*-0.053 + bs_const))*RT_ACCEL),RT_ACCEL);
+    return a_x - sin(((angle/90.0) + 3)*(PI/2)) * fmin(((left_power+ LT_OK * (left_power*-0.06 + bs_const_h))*LT_ACCEL),LT_ACCEL);
+}
 
 double Velocity_X_robust() {
- if (fabs(Velocity_X() - Velocity_X()) < 1 && fabs(Velocity_X() - Velocity_X()) < 1 && fabs(Velocity_X() - Velocity_X()) < 1) {
+ double vel_threshold = 6;
+ if (fabs(Velocity_X() - Velocity_X()) < vel_threshold && fabs(Velocity_X() - Velocity_X()) < vel_threshold && fabs(Velocity_X() - Velocity_X()) < vel_threshold) {
   return velocity[0];
  } else {
   return velocity[0];
@@ -819,7 +910,8 @@ double Velocity_X_robust() {
 
 
 double Velocity_Y_robust() {
- if (fabs(Velocity_Y() - Velocity_Y()) < 1 && fabs(Velocity_Y() - Velocity_Y()) < 1 && fabs(Velocity_Y() - Velocity_Y()) < 1) {
+ double vel_threshold = 6;
+ if (fabs(Velocity_Y() - Velocity_Y()) < vel_threshold && fabs(Velocity_Y() - Velocity_Y()) < vel_threshold && fabs(Velocity_Y() - Velocity_Y()) < vel_threshold) {
   return velocity[1];
  } else {
   return velocity[1];
@@ -828,5 +920,25 @@ double Velocity_Y_robust() {
 
 
 
+double Position_X_robust() {
+  double vel_threshold = 6, pos_threshold = 65;
+  if (fabs(Position_X() - Position_X()) < pos_threshold && fabs(Position_X() - Position_X()) < pos_threshold && fabs(Position_X() - Position_X()) < pos_threshold) {
+    return posx;
+  } else if (fabs(Velocity_X() - Velocity_X()) < vel_threshold && fabs(Velocity_X() - Velocity_X()) < vel_threshold && fabs(Velocity_X() - Velocity_X()) < vel_threshold) {
+    return position_v[0];
+  } else {
+    return position[0];
+  }
+}
 
 
+double Position_Y_robust() {
+  double vel_threshold = 6, pos_threshold = 65;
+  if (fabs(Position_Y() - Position_Y()) < pos_threshold && fabs(Position_Y() - Position_Y()) < pos_threshold && fabs(Position_Y() - Position_Y()) < pos_threshold) {
+    return posy;
+  } else if (fabs(Velocity_Y() - Velocity_Y()) < vel_threshold && fabs(Velocity_Y() - Velocity_Y()) < vel_threshold && fabs(Velocity_Y() - Velocity_Y()) < vel_threshold) {
+    return position_v[1];
+  } else {
+    return position[1];
+  }
+}
